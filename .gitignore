@@ -1,0 +1,7 @@
+/roost
+/dist/
+/data/
+/vendor/
+*.test
+*.out
+roost.toml

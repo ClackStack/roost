@@ -1,0 +1,259 @@
+:root {
+	--paper: #fffdf4;
+	--ink: #111;
+	--ink-soft: #3b3a36;
+	--yellow: #ffe84d;
+	--pink: #ff6fae;
+	--teal: #2dd4bf;
+	--white: #fff;
+	--marker: 'Permanent Marker', 'Karla', sans-serif;
+	--body: 'Karla', sans-serif;
+	--code: 'JetBrains Mono', ui-monospace, monospace;
+	--gutter: clamp(16px, 4vw, 56px);
+	--section: clamp(64px, 9vw, 128px);
+	color-scheme: light;
+	scrollbar-color: var(--ink) var(--paper);
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+	scroll-padding-top: 88px;
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: url('./lib/assets/toner.png') var(--paper);
+	color: var(--ink);
+	font: 500 clamp(1.0625rem, 0.98rem + 0.3vw, 1.25rem) / 1.5 var(--body);
+	overflow-x: clip;
+	font-variant-numeric: tabular-nums;
+}
+
+::selection {
+	background: var(--yellow);
+	color: var(--ink);
+}
+
+h1,
+h2,
+h3 {
+	font-family: var(--marker);
+	font-weight: 400;
+	line-height: 1.08;
+	margin: 0;
+	text-wrap: balance;
+}
+
+h2 {
+	font-size: clamp(2.25rem, 1.5rem + 3.2vw, 4.25rem);
+	margin-bottom: 0.4em;
+}
+
+h3 {
+	font-size: clamp(1.5rem, 1.25rem + 0.9vw, 2rem);
+	margin-bottom: 0.3em;
+}
+
+p {
+	margin: 0 0 1em;
+	max-width: 62ch;
+}
+
+p,
+li,
+dd {
+	text-wrap: pretty;
+}
+
+a {
+	color: inherit;
+	text-decoration-thickness: 2px;
+	text-underline-offset: 4px;
+}
+
+a:hover {
+	text-decoration-color: var(--pink);
+	text-decoration-thickness: 4px;
+}
+
+:focus-visible {
+	outline: 4px solid var(--ink);
+	outline-offset: 3px;
+	border-radius: 6px;
+	box-shadow: 0 0 0 3px var(--white);
+}
+
+code {
+	font: 400 0.88em var(--code);
+	background: rgb(17 17 17 / 8%);
+	padding: 0.1em 0.3em;
+	border-radius: 4px;
+}
+
+.wrap {
+	max-width: 1440px;
+	margin-inline: auto;
+	padding-inline: var(--gutter);
+}
+
+.page {
+	padding-block: var(--section);
+}
+
+.lede {
+	font-size: 1.15em;
+	max-width: 56ch;
+}
+
+.frame {
+	position: relative;
+	border-radius: 10px;
+}
+
+/* The marker line sits on its own layer so the wobble never touches the text inside. */
+.frame::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border: 3.5px solid var(--ink);
+	border-radius: 10px 7px 12px 6px;
+	pointer-events: none;
+	filter: url(#wob);
+}
+
+/* Highlighter swipe. The finished swipe is the default; motion only adds the stroke. */
+.hl {
+	position: relative;
+	display: inline-block;
+	background: none;
+	color: inherit;
+	isolation: isolate;
+	padding-inline: 0.2em;
+}
+
+.hl::before {
+	content: '';
+	position: absolute;
+	inset: 0.02em -0.04em;
+	z-index: -1;
+	background: var(--hl, var(--yellow));
+	mask: url('./lib/assets/swipe.svg') center / 100% 100% no-repeat;
+}
+
+.scrawl {
+	font: 400 1.35rem/1.15 var(--marker);
+}
+
+.ul {
+	padding-bottom: 0.14em;
+	background: url('./lib/assets/underline.svg') 0 100% / 100% 0.2em no-repeat;
+}
+
+.btn {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5em;
+	min-height: 52px;
+	padding: 0.5em 1.1em;
+	background: var(--yellow);
+	color: var(--ink);
+	border: 0;
+	border-radius: 10px;
+	font: 400 1.3rem/1.1 var(--marker);
+	text-decoration: none;
+	cursor: pointer;
+	transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Two marker passes around every button, the way you'd go over a box twice. */
+.btn::before,
+.btn::after {
+	content: '';
+	position: absolute;
+	pointer-events: none;
+	border: 3.5px solid var(--ink);
+	border-radius: 11px 7px 13px 6px;
+	filter: url(#wob);
+}
+
+.btn::before {
+	inset: 0;
+}
+
+.btn::after {
+	inset: 2px -3px -3px 2px;
+	border-width: 2px;
+}
+
+.btn:hover {
+	transform: rotate(-1.2deg) scale(1.03);
+}
+
+.btn:active {
+	transform: scale(0.98);
+}
+
+.btn:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	@supports (animation-timeline: view()) {
+		.draw {
+			stroke-dasharray: 1;
+			animation: draw linear both;
+			animation-timeline: view();
+			animation-range: entry 15% cover 45%;
+		}
+
+		.hl.swipe::before {
+			animation: swipe linear both;
+			animation-timeline: --hl;
+			animation-range: entry 30% cover 40%;
+		}
+
+		.hl.swipe {
+			view-timeline-name: --hl;
+		}
+	}
+
+	@keyframes draw {
+		from {
+			stroke-dashoffset: 1;
+		}
+		to {
+			stroke-dashoffset: 0;
+		}
+	}
+
+	@keyframes swipe {
+		from {
+			clip-path: inset(0 100% 0 0);
+		}
+		to {
+			clip-path: inset(0);
+		}
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	*,
+	*::before,
+	*::after {
+		transition: none !important;
+	}
+}

@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-04T15:33:49-05:00",
+  "title": "Design System: Roost",
+  "extensions": {
+    "colorMeta": {
+      "yellow": {
+        "role": "primary",
+        "displayName": "Highlighter Yellow",
+        "tonalRamp": [
+          "#0f0b00",
+          "#2b2500",
+          "#4c4300",
+          "#6e6205",
+          "#938309",
+          "#b9a721",
+          "#d7cb80",
+          "#f3f0d6"
+        ]
+      },
+      "pink": {
+        "role": "secondary",
+        "displayName": "Mascot Pink",
+        "tonalRamp": [
+          "#1f000c",
+          "#490027",
+          "#7a0146",
+          "#aa1a66",
+          "#d24687",
+          "#ef77a9",
+          "#feaecc",
+          "#ffe7ef"
+        ]
+      },
+      "teal": {
+        "role": "tertiary",
+        "displayName": "Marker Teal",
+        "tonalRamp": [
+          "#000f0c",
+          "#002c27",
+          "#004e45",
+          "#047165",
+          "#019787",
+          "#3ebcaa",
+          "#90dacd",
+          "#dcf5f0"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Photocopy Paper",
+        "tonalRamp": [
+          "#0c0b08",
+          "#262520",
+          "#44423b",
+          "#63615a",
+          "#84827a",
+          "#a7a59e",
+          "#cac9c4",
+          "#efeeed"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "Clean Sheet White",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Marker Ink",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Faded Ink",
+        "tonalRamp": [
+          "#0c0b09",
+          "#262522",
+          "#43423e",
+          "#62615d",
+          "#83827e",
+          "#a6a5a1",
+          "#cac9c6",
+          "#efeeed"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The page headline only, set in uppercase."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Sub-headings inside a section."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Numbered comic panel captions."
+      },
+      "scrawl": {
+        "displayName": "Scrawl",
+        "purpose": "Margin notes beside a doodle arrow and the bird's replies."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Marker label on the primary button."
+      },
+      "nav": {
+        "displayName": "Nav",
+        "purpose": "Masthead links."
+      },
+      "tab": {
+        "displayName": "Tab",
+        "purpose": "Tab labels."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All reading text."
+      },
+      "body-strong": {
+        "displayName": "Body Strong",
+        "purpose": "Row labels, list lead-ins, form values, code captions."
+      },
+      "code-block": {
+        "displayName": "Code Block",
+        "purpose": "Commands and config in framed blocks."
+      },
+      "chip": {
+        "displayName": "Chip",
+        "purpose": "Example query chips."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sheet-rest",
+        "value": "0 3px 14px rgb(17 17 17 / 28%)",
+        "purpose": "Under full-bleed coloured sheets only."
+      },
+      {
+        "name": "focus-halo",
+        "value": "0 0 0 3px var(--white)",
+        "purpose": "White ring that separates the focus outline from coloured surfaces."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-marker",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Fast ease-out for state changes and the headline swipe."
+      },
+      {
+        "name": "ease-rebound",
+        "value": "cubic-bezier(0.3, 0, 0.3, 1)",
+        "purpose": "The leak toy document bouncing off the wall."
+      },
+      {
+        "name": "duration-press",
+        "value": "160ms",
+        "purpose": "Button hover and press."
+      },
+      {
+        "name": "duration-nav",
+        "value": "220ms",
+        "purpose": "Nav highlighter band wiping in."
+      },
+      {
+        "name": "duration-swipe",
+        "value": "700ms",
+        "purpose": "Headline swipe on load, after a 250ms delay."
+      },
+      {
+        "name": "duration-rebound",
+        "value": "900ms",
+        "purpose": "One leak toy attempt."
+      },
+      {
+        "name": "draw-range",
+        "value": "entry 15% cover 45%",
+        "purpose": "Scroll range over which doodle arrows draw on."
+      },
+      {
+        "name": "swipe-range",
+        "value": "entry 30% cover 40%",
+        "purpose": "Scroll range over which highlighter swipes wipe in."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "520px"
+      },
+      {
+        "name": "table",
+        "value": "720px"
+      },
+      {
+        "name": "masthead",
+        "value": "860px"
+      },
+      {
+        "name": "columns",
+        "value": "960px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one loud control: a yellow box drawn twice with marker.",
+      "html": "<svg width=\"0\" height=\"0\" style=\"position:absolute\" aria-hidden=\"true\"><filter id=\"ds-wob-btn\"><feTurbulence baseFrequency=\"0.035\" numOctaves=\"2\" seed=\"4\"/><feDisplacementMap in=\"SourceGraphic\" scale=\"4\"/></filter></svg><button class=\"ds-btn\" type=\"button\">Download Roost</button>",
+      "css": ".ds-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0.5em 1.1em; background: var(--yellow); color: var(--ink); border: 0; border-radius: 10px; font-family: 'Permanent Marker', 'Karla', sans-serif; font-weight: 400; font-size: 1.3rem; line-height: 1.1; cursor: pointer; transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn::before, .ds-btn::after { content: ''; position: absolute; pointer-events: none; border: 3.5px solid var(--ink); border-radius: 11px 7px 13px 6px; filter: url(#ds-wob-btn); } .ds-btn::before { inset: 0; } .ds-btn::after { inset: 2px -3px -3px 2px; border-width: 2px; } .ds-btn:hover { transform: rotate(-1.2deg) scale(1.03); } .ds-btn:active { transform: scale(0.98); } .ds-btn:focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; border-radius: 6px; box-shadow: 0 0 0 3px var(--white); }"
+    },
+    {
+      "name": "Tabs",
+      "kind": "custom",
+      "refersTo": "tab",
+      "description": "Marker toggles for switching between views; the selected one fills teal.",
+      "html": "<div class=\"ds-tabs\" role=\"group\" aria-label=\"Connection type\"><button class=\"ds-tab\" type=\"button\" aria-pressed=\"true\">MCP over HTTP</button><button class=\"ds-tab\" type=\"button\" aria-pressed=\"false\">REST</button></div>",
+      "css": ".ds-tabs { display: flex; flex-wrap: wrap; gap: 8px; } .ds-tab { font-family: 'Permanent Marker', 'Karla', sans-serif; font-weight: 400; font-size: 1.15rem; line-height: 1; min-height: 48px; padding: 0 14px; color: var(--ink); background: var(--white); border: 3px solid var(--ink); border-radius: 12px 8px 14px 7px; cursor: pointer; } .ds-tab:hover { background: var(--paper); transform: rotate(-1deg); } .ds-tab[aria-pressed='true'] { background: var(--teal); } .ds-tab:focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; border-radius: 6px; box-shadow: 0 0 0 3px var(--white); }"
+    },
+    {
+      "name": "Example Chip",
+      "kind": "chip",
+      "refersTo": "chip-example",
+      "description": "A mono query suggestion that fills yellow when hovered or selected.",
+      "html": "<button class=\"ds-chip ds-chip-on\" type=\"button\">acquisition</button> <button class=\"ds-chip\" type=\"button\">back*</button>",
+      "css": ".ds-chip { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 400; font-size: 0.9rem; min-height: 44px; padding: 0 12px; background: none; color: var(--ink); border: 2.5px solid var(--ink); border-radius: 10px 7px 12px 6px; cursor: pointer; } .ds-chip:hover, .ds-chip-on { background: var(--yellow); } .ds-chip:focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; border-radius: 6px; box-shadow: 0 0 0 3px var(--white); }"
+    },
+    {
+      "name": "Frame Card",
+      "kind": "card",
+      "refersTo": "frame-card",
+      "description": "A white container inside a wobbled marker line; the text stays crisp on its own layer.",
+      "html": "<svg width=\"0\" height=\"0\" style=\"position:absolute\" aria-hidden=\"true\"><filter id=\"ds-wob-card\"><feTurbulence baseFrequency=\"0.035\" numOctaves=\"2\" seed=\"4\"/><feDisplacementMap in=\"SourceGraphic\" scale=\"4\"/></filter></svg><div class=\"ds-card\"><strong>The one exception:</strong> semantic search is off by default.</div>",
+      "css": ".ds-card { position: relative; border-radius: 10px; } .ds-card::after { content: ''; position: absolute; inset: 0; border: 3.5px solid var(--ink); border-radius: 10px 7px 12px 6px; pointer-events: none; filter: url(#ds-wob-card); } .ds-card { background: var(--white); color: var(--ink); padding: clamp(16px, 2.4vw, 28px); font-family: 'Karla', sans-serif; font-weight: 500; line-height: 1.5; }"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "field-search",
+      "description": "A paper-filled input inside a marker frame, with a pink caret.",
+      "html": "<svg width=\"0\" height=\"0\" style=\"position:absolute\" aria-hidden=\"true\"><filter id=\"ds-wob-field\"><feTurbulence baseFrequency=\"0.035\" numOctaves=\"2\" seed=\"4\"/><feDisplacementMap in=\"SourceGraphic\" scale=\"4\"/></filter></svg><div class=\"ds-field\"><input class=\"ds-input\" type=\"search\" aria-label=\"Search\" value=\"acquisition\"></div>",
+      "css": ".ds-field { position: relative; border-radius: 10px; } .ds-field::after { content: ''; position: absolute; inset: 0; border: 3.5px solid var(--ink); border-radius: 10px 7px 12px 6px; pointer-events: none; filter: url(#ds-wob-field); } .ds-field { background: var(--paper); } .ds-input { width: 100%; min-height: 52px; padding: 0 16px; font-family: 'Karla', sans-serif; font-weight: 700; font-size: 1.15rem; color: var(--ink); caret-color: var(--pink); background: none; border: 0; border-radius: 10px; } .ds-input:focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; border-radius: 6px; box-shadow: 0 0 0 3px var(--white); }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Marker links with a highlighter band that wipes in on hover; download keeps its band.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Main\"><a href=\"#why\">why</a><a href=\"#compare\">compare</a><a href=\"#get\" class=\"ds-nav-get\">download</a></nav>",
+      "css": ".ds-nav { display: flex; flex-wrap: wrap; gap: 2px 26px; font-family: 'Permanent Marker', 'Karla', sans-serif; font-weight: 400; font-size: 1.3rem; line-height: 1; } .ds-nav a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); text-decoration: none; background: linear-gradient(transparent 62%, var(--yellow) 62% 92%, transparent 92%) no-repeat 0 0 / 0% 100%; transition: background-size 220ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-nav a:hover, .ds-nav a.ds-nav-get { background-size: 100% 100%; } .ds-nav a:focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; border-radius: 6px; box-shadow: 0 0 0 3px var(--white); }"
+    },
+    {
+      "name": "Code Block",
+      "kind": "custom",
+      "refersTo": "code-block",
+      "description": "A framed white figure with a caption, a Copy text button and a yellow bar on the line that matters.",
+      "html": "<svg width=\"0\" height=\"0\" style=\"position:absolute\" aria-hidden=\"true\"><filter id=\"ds-wob-code\"><feTurbulence baseFrequency=\"0.035\" numOctaves=\"2\" seed=\"4\"/><feDisplacementMap in=\"SourceGraphic\" scale=\"4\"/></filter></svg><figure class=\"ds-code\"><figcaption><span>Check it yourself</span><button type=\"button\">Copy</button></figcaption><pre tabindex=\"0\"><code><span class=\"ds-line\">cp roost.example.toml roost.toml</span><span class=\"ds-line ds-line-on\">make e2e</span></code></pre></figure>",
+      "css": ".ds-code { position: relative; border-radius: 10px; } .ds-code::after { content: ''; position: absolute; inset: 0; border: 3.5px solid var(--ink); border-radius: 10px 7px 12px 6px; pointer-events: none; filter: url(#ds-wob-code); } .ds-code { margin: 0; background: var(--white); color: var(--ink); } .ds-code figcaption { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.5rem 1rem; border-bottom: 3px solid var(--ink); font-family: 'Karla', sans-serif; font-weight: 700; } .ds-code button { font: inherit; font-size: 0.9em; background: none; border: 0; min-height: 44px; color: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; } .ds-code button:hover { text-decoration-color: var(--pink); text-decoration-thickness: 3px; } .ds-code button:focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; border-radius: 6px; box-shadow: 0 0 0 3px var(--white); } .ds-code pre { margin: 0; padding: 1rem; overflow-x: auto; line-height: 1.6; } .ds-code code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 400; font-size: clamp(0.82rem, 0.78rem + 0.2vw, 0.95rem); } .ds-line { display: block; width: max-content; min-width: 100%; } .ds-line-on { background: var(--yellow); }"
+    },
+    {
+      "name": "Highlighter Swipe",
+      "kind": "custom",
+      "description": "A torn-edge highlight behind the phrase that carries the point; yellow by default, pink for the most important or painful line.",
+      "html": "<h2 class=\"ds-head\">Nothing leaves. <mark class=\"ds-hl\">Not even a little.</mark></h2>",
+      "css": ".ds-head { font-family: 'Permanent Marker', 'Karla', sans-serif; font-weight: 400; font-size: clamp(2.25rem, 1.5rem + 3.2vw, 4.25rem); line-height: 1.08; color: var(--ink); margin: 0; } .ds-hl { position: relative; display: inline-block; background: none; color: inherit; isolation: isolate; padding-inline: 0.2em; } .ds-hl::before { content: ''; position: absolute; inset: 0.02em -0.04em; z-index: -1; background: var(--hl, var(--yellow)); mask: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 60' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.86' d='M7 7 391 3l8 7-7 6 7 8-8 7 7 9-7 8 5 7-386 3-8-6 8-8-9-9 7-9-8-9z'/%3E%3Cpath d='M4 12 396 8v9L3 21zM3 33l396-5v10L4 41zM6 48l388-3v4L5 53z'/%3E%3C/svg%3E\") center / 100% 100% no-repeat; }"
+    },
+    {
+      "name": "Stapled Sheet",
+      "kind": "custom",
+      "refersTo": "insert-yellow",
+      "description": "A full-bleed coloured sheet that tilts while its content stays level, held by two drawn staples.",
+      "html": "<section class=\"ds-sheet\" aria-label=\"Example sheet\"><svg class=\"ds-staple ds-staple-a\" width=\"44\" height=\"12\" viewBox=\"0 0 44 12\" fill=\"none\" aria-hidden=\"true\"><path d=\"M3 9V4h38v5\" stroke=\"var(--ink)\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><svg class=\"ds-staple ds-staple-b\" width=\"44\" height=\"12\" viewBox=\"0 0 44 12\" fill=\"none\" aria-hidden=\"true\"><path d=\"M3 9V4h38v5\" stroke=\"var(--ink)\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><p>Quick on most searches.</p></section>",
+      "css": ".ds-sheet { --sheet: var(--yellow); position: relative; isolation: isolate; overflow-x: clip; padding: clamp(40px, 6vw, 88px) clamp(16px, 4vw, 56px); color: var(--ink); font-family: 'Permanent Marker', 'Karla', sans-serif; font-weight: 400; font-size: 2rem; } .ds-sheet p { margin: 0; } .ds-sheet::before { content: ''; position: absolute; inset: 0 -3%; z-index: -1; background: radial-gradient(rgb(17 17 17 / 13%) 1.6px, transparent 2px) 0 0 / 15px 15px, var(--sheet); transform: rotate(-0.4deg); box-shadow: 0 3px 14px rgb(17 17 17 / 28%); } .ds-staple { position: absolute; top: 2px; } .ds-staple-a { left: 14%; rotate: -3deg; } .ds-staple-b { right: 16%; rotate: 4deg; }"
+    },
+    {
+      "name": "Bird",
+      "kind": "custom",
+      "description": "The mascot in its default happy mood; worried, proud and sad variants mark state.",
+      "html": "<svg class=\"ds-bird\" width=\"96\" height=\"96\" viewBox=\"0 0 106 106\" fill=\"none\" stroke=\"var(--ink)\" stroke-width=\"5\" stroke-linejoin=\"round\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M18 62c0-26 18-44 40-44 12 0 20 6 24 14 2 16-2 21-5 27-5 21-18 27-32 27-16 0-27-9-27-24z\" fill=\"var(--pink)\"/><path d=\"M30 50c-2 8 0 14 6 20M41 50c-2 8 0 13 5 18\" stroke-width=\"4\"/><path d=\"M50 86v12m-8 0h16M66 84v14m-8 0h16\"/><circle cx=\"66\" cy=\"32\" r=\"5\" fill=\"var(--ink)\" stroke=\"none\"/><path d=\"M80 30l17 8-15 7z\" fill=\"var(--yellow)\" stroke-width=\"4\"/></svg>",
+      "css": ".ds-bird { display: block; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Sketch for a Friend",
+    "overview": "Roost looks the way a good engineer explains something on paper to someone they like: quickly, in black marker, with a highlighter out for the line that matters. Everything sits on photocopied paper with visible toner grain. Full-bleed sheets of highlighter colour are stapled in between the paper pages, and a small pink bird reacts to what the page is saying.\n\nThe drawing is loose but the reading is not. Display lettering is loud and hand-made; anything that has to be read properly drops into a clean, generously sized sans. Frames wobble, but the text inside them stays perfectly crisp. Density is comfortable, with large body type, wide section spacing and plain ink on every surface.\n\nThe system refuses the dark terminal hero and the row of icon cards. Code sits on white like everything else, and icons are doodles beside text, not tiles.",
+    "keyCharacteristics": [
+      "Warm paper with toner grain, never a dark theme.",
+      "Three flat highlighters and one black marker. No fourth hue.",
+      "Marker lettering for voice, Karla for reading, JetBrains Mono for commands and config.",
+      "Wobbly drawn lines on their own layer, so the text stays sharp.",
+      "A bird mascot whose expression carries state.",
+      "Depth comes from stacked sheets of paper, not from floating UI."
+    ],
+    "rules": [
+      {
+        "name": "The Three Highlighters Rule",
+        "body": "Yellow, pink and teal are the only hues. A fourth colour means a pen the world doesn't own.",
+        "section": "colors"
+      },
+      {
+        "name": "The Black Marker Rule",
+        "body": "Text is ink on every surface, coloured sheets included. White text on a highlighter does not exist here.",
+        "section": "colors"
+      },
+      {
+        "name": "The Marker Speaks, Karla Explains Rule",
+        "body": "Marker carries headings, labels, numbers and short remarks. Any sentence a reader has to study is Karla, including every claim of fact longer than a caption.",
+        "section": "typography"
+      },
+      {
+        "name": "The Run-It-Yourself Rule",
+        "body": "Commands and config a reader would run or paste are JetBrains Mono, so anything checkable looks checkable.",
+        "section": "typography"
+      },
+      {
+        "name": "The Stapled Sheet Rule",
+        "body": "Only a stapled sheet gets a shadow. If something else needs to stand out, give it a marker frame and a white fill.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Wobble Layer Rule",
+        "body": "The wobble never touches text. The line lives on its own layer (a pseudo-element or an SVG group), and labels sit outside it.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Second Pass Rule",
+        "body": "A button is outlined twice, the way you go over a box twice with a marker: a 3.5px line, then a thinner 2px line offset about 3px down and right. The second pass is an unfilled, wobbled line. It belongs to buttons, and it never fills in to become a solid offset block.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do put every page on Photocopy Paper with the toner tile, and bring colour in through full-bleed sheets.",
+      "Do keep all text in Marker Ink, and limit Faded Ink to fine print on paper or white.",
+      "Do make the finished state the default for every drawn animation, so reduced motion loses nothing.",
+      "Do put the `#wob` filter on a separate layer from any text.",
+      "Do choose the bird's mood from what the nearby words mean.",
+      "Do use one swipe per heading, on the phrase that carries the point.",
+      "Do keep controls at least 44px tall, and primary controls and fields at 52px.",
+      "Do self-host every font and asset, since the site makes zero third-party requests."
+    ],
+    "donts": [
+      "Don't add a dark hero, a dark section or a dark code block.",
+      "Don't line up framed icon cards. Doodle icons sit beside text, unframed.",
+      "Don't add a fourth hue, or set text in white, pink, yellow or teal.",
+      "Don't give cards, buttons or fields a shadow, and don't let the button's second pass fill in as a solid offset block.",
+      "Don't tilt the content of a sheet along with the sheet.",
+      "Don't set long explanatory text in Permanent Marker.",
+      "Don't show a worried, proud or sad bird beside words that don't mean it."
+    ]
+  }
+}

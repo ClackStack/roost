@@ -1,0 +1,38 @@
+[Unit]
+Description=Roost document server
+After=network.target remote-fs.target
+
+[Service]
+ExecStart=/usr/local/bin/roost serve --config /etc/roost/roost.toml
+User=roost
+Group=roost
+Restart=on-failure
+StateDirectory=roost
+StateDirectoryMode=0700
+# ProtectSystem=strict makes everything else read-only, so if you set
+# audit.jsonl_path, add its directory: ReadWritePaths=/var/log/roost
+
+# Roost only reads documents and writes its data directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+
+# Blocks all outbound traffic at the OS level, as a second layer behind Roost's
+# own design. Inbound still works on localhost and the addresses you allow.
+# If you enable embeddings, add its address, such as IPAddressAllow=10.0.0.5.
+IPAddressDeny=any
+IPAddressAllow=localhost
+# Add the client subnets that may connect, such as IPAddressAllow=10.0.0.0/8.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,49 @@
+# Checks and builds website/, then publishes it to the `roost` Bunny site.
+# Runs only when the website changes.
+#
+# Repository settings (Settings > Secrets and variables > Actions):
+#   Secret  BUNNYNET_API_KEY  Bunny account API key. It is account-wide.
+#
+# Roll back with `bunny sites deployments publish --previous --site roost`.
+
+name: website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - website/**
+      - .github/workflows/website.yml
+  workflow_dispatch:
+
+# Let a running deploy finish, so two publishes never race.
+concurrency:
+  group: website-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: install pnpm
+        run: npm i -g pnpm@11.1.3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm run build
+      # `bunny sites` is in public preview, so keep the CLI pinned.
+      - name: install bunny cli
+        run: npm i -g @bunny.net/cli@0.21.1
+      - name: publish
+        env:
+          BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
+        run: bunny sites deploy build --site roost --no-spa --no-link
