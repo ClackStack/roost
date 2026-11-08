@@ -9,10 +9,7 @@
 
 	// Runs in the browser only and sends nothing anywhere.
 	onMount(() => {
-		const ua = navigator.userAgent;
-		if (/Windows/.test(ua)) chosen = 'windows-amd64';
-		else if (/Mac OS X/.test(ua)) chosen = 'darwin-arm64';
-		else if (/aarch64|arm64/i.test(ua)) chosen = 'linux-arm64';
+		if (/aarch64|arm64/i.test(navigator.userAgent)) chosen = 'linux-arm64';
 	});
 </script>
 

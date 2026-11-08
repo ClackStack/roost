@@ -20,11 +20,11 @@ import (
 	sdkauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/paulhovey/roost/internal/auth"
-	"github.com/paulhovey/roost/internal/config"
-	"github.com/paulhovey/roost/internal/core"
-	"github.com/paulhovey/roost/internal/mcpserver"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/auth"
+	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/core"
+	"github.com/ClackStack/roost/internal/mcpserver"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 //go:embed openapi.json

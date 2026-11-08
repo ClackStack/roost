@@ -37,7 +37,7 @@ path = "/srv/documents/hr"
 
 [audit]
 log_queries = true        # search text can be sensitive; see SECURITY.md
-# jsonl_path = "/var/log/roost/audit.jsonl"
+# jsonl_path = "/var/log/roost/audit.jsonl"  # send SIGHUP after rotating
 
 # Optional semantic search through an on-prem service. This is the only feature
 # that makes outbound connections, and it sends document text to the endpoint.

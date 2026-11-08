@@ -57,6 +57,8 @@ name = "hr"
 path = "$work/hr"
 T
 R() { "$work/roost" "$@"; }
+R init --config "$work/init.toml" >/dev/null
+cmp -s "$work/init.toml" "$repo/roost.example.toml" || fail "roost init output differs from roost.example.toml"
 legal=$(R token create --config "$work/roost.toml" --name legal-bot --collections legal 2>/dev/null)
 admin=$(R token create --config "$work/roost.toml" --name admin --all 2>/dev/null)
 

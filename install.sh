@@ -26,7 +26,7 @@ dest="${ROOST_INSTALL_DIR:-}"
 say() { printf '%s\n' "$*"; }
 die() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 
-for tool in curl sha256sum install; do
+for tool in curl sha256sum; do
   command -v "$tool" >/dev/null 2>&1 || die "missing $tool (on Debian/Ubuntu: apt-get install curl coreutils)"
 done
 
@@ -40,9 +40,12 @@ esac
 
 if [ -z "$tag" ]; then
   say "looking up the latest release"
-  tag=$(curl -fsSL -o /dev/null -w '%{url_effective}' "$dl/latest") ||
+  url=$(curl -fsSL -o /dev/null -w '%{url_effective}' "$dl/latest") ||
     die "could not resolve the latest release; pin one with ROOST_VERSION=vX.Y.Z"
-  tag=${tag##*/tag/}
+  case "$url" in
+    */tag/?*) tag=${url##*/tag/} ;;
+    *) die "no latest release found at $dl/latest; pin a tag with ROOST_VERSION=vX.Y.Z" ;;
+  esac
 fi
 
 name="roost-$tag-linux-$arch"
@@ -88,8 +91,7 @@ say ""
 say "installed $installed_version to $dest/roost"
 say ""
 say "try it:"
-say "  curl -fsSLO https://raw.githubusercontent.com/$repo/$tag/roost.example.toml"
-say "  cp roost.example.toml roost.toml    # then set data_dir and collections"
+say "  $dest/roost init                    # writes roost.toml; set data_dir and collections"
 say "  $dest/roost token create --name alice --collections legal,hr"
 say "  $dest/roost serve                   # serves http://127.0.0.1:8484"
 say ""

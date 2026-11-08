@@ -113,7 +113,7 @@
 
 	const untested = [
 		'MCP client apps, including Claude Code. We used the official Go MCP client, raw JSON-RPC and curl.',
-		'Running on Windows and macOS. The binaries compile but haven’t been run.',
+		'Running on Windows and macOS. Release binaries are Linux-only; other platforms build from source and haven’t been run.',
 		'Real NFS and SMB shares.',
 		'The Docker image, which hasn’t been built yet.'
 	];
@@ -290,7 +290,7 @@
 	<div class="page wrap get">
 		<div>
 			<h2>Still here? Grab the binary.</h2>
-			<p class="lede">No installer, no sign-up, no account. One file on a machine inside your network.</p>
+			<p class="lede">No sign-up, no account. One file on a Linux machine inside your network.</p>
 			<Download id="platform-bottom" />
 			<p class="small">
 				<a href={checksumsUrl}>SHA-256 checksums</a> · <a href={readmeUrl}>Full docs</a> · Air-gapped? <code>make offline-bundle</code> packages the source with every dependency.
@@ -298,17 +298,16 @@
 		</div>
 		<div>
 			<Code
-				label="Quick start, Linux and macOS"
-				mark={4}
+				label="Quick start on Linux"
+				mark={3}
 				lines={[
-					'mv roost-* roost && chmod +x roost',
-					'cp roost.example.toml roost.toml',
-					'# set data_dir and collections in roost.toml',
-					'./roost token create --name alice --collections legal,hr',
-					'./roost serve'
+					'curl -fsSL https://roost.clackstack.dev/install.sh | sh',
+					'roost init   # writes roost.toml; set data_dir and collections',
+					'roost token create --name alice --collections legal,hr',
+					'roost serve'
 				]}
 			/>
-			<p class="small">Download <a href={exampleConfigUrl}>roost.example.toml</a> first, it isn’t inside the binary. Save the token, it’s shown only once.</p>
+			<p class="small"><code>install.sh</code> verifies the binary against <a href={checksumsUrl}>SHA256SUMS</a>. Or download the binary on the left and run <code>./roost init</code> to write <a href={exampleConfigUrl}>roost.example.toml</a>. Save the token, it’s shown only once.</p>
 		</div>
 	</div>
 </Insert>

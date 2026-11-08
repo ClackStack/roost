@@ -8,7 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/paulhovey/roost/internal/core"
+	"github.com/ClackStack/roost/internal/core"
 )
 
 const instructions = `Roost searches an organization's internal documents.

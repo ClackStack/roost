@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/paulhovey/roost/internal/auth"
-	"github.com/paulhovey/roost/internal/config"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/auth"
+	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 type env struct {
@@ -390,6 +390,41 @@ func TestAuditQueryLoggingOff(t *testing.T) {
 	fi, _ := os.Stat(jsonl)
 	if fi.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %o", fi.Mode().Perm())
+	}
+}
+
+func TestAuditReopen(t *testing.T) {
+	dir := t.TempDir()
+	jsonl := filepath.Join(dir, "audit.jsonl")
+	e := setup(t, func(c *config.Config) { c.Audit.JSONLPath = jsonl })
+	e.add("legal", "l.pdf", "L", store.Chunk{Section: "S", Text: "falcon heron"})
+	ctx := context.Background()
+	if _, err := e.svc.Search(ctx, e.all, SearchRequest{Query: "falcon"}); err != nil {
+		t.Fatal(err)
+	}
+	rotated := jsonl + ".1"
+	if err := os.Rename(jsonl, rotated); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.ReopenAudit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Search(ctx, e.all, SearchRequest{Query: "heron"}); err != nil {
+		t.Fatal(err)
+	}
+	oldBytes, err := os.ReadFile(rotated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newBytes, err := os.ReadFile(jsonl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(oldBytes), "falcon") || strings.Contains(string(oldBytes), "heron") {
+		t.Errorf("rotated = %s", oldBytes)
+	}
+	if !strings.Contains(string(newBytes), "heron") || strings.Contains(string(newBytes), "falcon") {
+		t.Errorf("new = %s", newBytes)
 	}
 }
 

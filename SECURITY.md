@@ -81,7 +81,8 @@ never follows references inside documents, such as remote images.
 - **Audit log contents.** Search text is logged by default because it matters in
   an investigation, but queries can themselves be sensitive. Set
   `audit.log_queries = false` if needed. The log is in the database and optionally
-  a JSONL file; Roost does not rotate or expire either.
+  a JSONL file; Roost does not rotate or expire either (send `SIGHUP` after
+  rotating the JSONL file so `roost serve` reopens it).
 - **Audit failure stops service.** If an audit record cannot be written, the
   request is refused. A full disk therefore causes an outage rather than unlogged
   access. Monitor disk space.

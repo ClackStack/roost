@@ -37,8 +37,13 @@ release:
 offline-bundle:
 	mkdir -p dist
 	go mod vendor
-	tar czf dist/roost-$(VERSION)-src.tar.gz --exclude=dist --exclude=.git --transform 's,^\.,roost,' .
+	tar czf dist/roost-$(VERSION)-src.tar.gz \
+		--exclude=dist --exclude=.git --exclude=./roost --exclude=./roost.toml --exclude=./data \
+		--exclude='*.test' --exclude='*.out' --exclude=.crush --exclude=.bunny --exclude=.impeccable \
+		--exclude=website/node_modules --exclude=website/build --exclude=website/.svelte-kit \
+		--transform 's,^\.,roost,' .
 	rm -rf vendor
+	cd dist && sha256sum roost-* > SHA256SUMS
 
 clean:
 	rm -rf roost dist vendor

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 // Prefix marks Roost tokens, so secret scanners can recognize a leaked one.

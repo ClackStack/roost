@@ -2,11 +2,12 @@
 # Run:   docker run -v /srv/documents:/docs:ro -v roost-data:/data \
 #          -v "$PWD/roost.toml:/etc/roost/roost.toml:ro" -p 8484:8484 roost
 FROM golang:1.26 AS build
+ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /roost ./cmd/roost
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /roost ./cmd/roost
 
 # The binary is static, so the image holds nothing else.
 FROM scratch

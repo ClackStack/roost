@@ -35,8 +35,8 @@ Self-hosted inside an enterprise network, including air-gapped ones. Documents l
 - Per-token collection grants enforced in the SQL query; audit failure refuses the request.
 - Parsers run in isolated, limited child processes.
 - Not in v1: OCR, legacy .doc/.xls/.ppt, email attachments, SSO, clustering, per-document ACLs, encryption at rest.
-- Licence: Apache-2.0 default, pending the user's confirmation.
-- Not yet public: no remote, repo URL or published releases exist at this time.
+- Licence: Apache-2.0.
+- Repo: https://github.com/ClackStack/roost (release binaries for Linux amd64/arm64).
 
 ## Brand Commitments
 

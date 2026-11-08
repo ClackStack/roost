@@ -4,6 +4,7 @@ After=network.target remote-fs.target
 
 [Service]
 ExecStart=/usr/local/bin/roost serve --config /etc/roost/roost.toml
+ExecReload=/bin/kill -HUP $MAINPID
 User=roost
 Group=roost
 Restart=on-failure

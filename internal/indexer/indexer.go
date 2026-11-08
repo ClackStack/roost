@@ -23,10 +23,10 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/paulhovey/roost/internal/chunk"
-	"github.com/paulhovey/roost/internal/config"
-	"github.com/paulhovey/roost/internal/extract"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/chunk"
+	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/extract"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 // Indexer scans collections into the store.

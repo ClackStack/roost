@@ -10,13 +10,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/paulhovey/roost/internal/config"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 // fakeServer returns a vector chosen by keyword: 'bird' and 'raptor' texts
@@ -114,6 +115,20 @@ func TestEmbedAndSearch(t *testing.T) {
 	p.Run(ctx)
 	if calls.Load() != before+2 {
 		t.Errorf("model change: %d calls", calls.Load()-before)
+	}
+
+	// Deleting a document without adding new chunks drops its vectors from the
+	// in-memory index on the next pass.
+	if err := st.DeleteDocuments(ctx, []string{"b"}); err != nil {
+		t.Fatal(err)
+	}
+	p.Run(ctx)
+	afterDel, err := p.Search(ctx, "raptor", []string{"legal", "hr"}, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(afterDel, 4) {
+		t.Errorf("deleted document's chunk remained in vector index: %v", afterDel)
 	}
 }
 

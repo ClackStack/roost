@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/paulhovey/roost/internal/extract"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/extract"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 // Target is the preferred chunk size in bytes; Max is the hard limit. Chunks

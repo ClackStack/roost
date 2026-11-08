@@ -2,6 +2,7 @@
 package config
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"net"
@@ -14,6 +15,25 @@ import (
 
 	"github.com/BurntSushi/toml"
 )
+
+// Example is the commented starter configuration, identical to roost.example.toml.
+//
+//go:embed example.toml
+var Example []byte
+
+// WriteExample writes the starter configuration to path, refusing to overwrite
+// an existing file.
+func WriteExample(path string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("%s already exists", path)
+		}
+		return err
+	}
+	_, werr := f.Write(Example)
+	return errors.Join(werr, f.Close())
+}
 
 // Config is the full server configuration.
 type Config struct {

@@ -24,8 +24,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/paulhovey/roost/internal/config"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 const (
@@ -240,6 +240,20 @@ func (p *Pipeline) Run(ctx context.Context) {
 	if done > 0 {
 		p.log.Info("embeddings updated", "chunks", done)
 		p.bump(ctx)
+		return
+	}
+	// If chunks were removed since the in-memory index was built, reload it
+	// even when no new chunks needed embedding.
+	p.idxMu.RLock()
+	hasIdx, idxLen := p.idx != nil, 0
+	if p.idx != nil {
+		idxLen = len(p.idx.ids)
+	}
+	p.idxMu.RUnlock()
+	if hasIdx {
+		if missing, total, err := p.st.EmbeddingProgress(ctx); err == nil && total-missing != idxLen {
+			p.bump(ctx)
+		}
 	}
 }
 
@@ -248,6 +262,9 @@ func (p *Pipeline) bump(ctx context.Context) {
 	if err := p.st.SetMeta(ctx, metaGeneration, gen); err != nil {
 		p.log.Error("embeddings: save generation", "err", err)
 	}
+	p.idxMu.Lock()
+	p.idxCheck = time.Time{}
+	p.idxMu.Unlock()
 }
 
 // index is every vector in one flat array, for scanning without pointer chasing.

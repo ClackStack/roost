@@ -1,4 +1,4 @@
-module github.com/paulhovey/roost
+module github.com/ClackStack/roost
 
 go 1.26.0
 

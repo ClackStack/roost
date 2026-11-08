@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/paulhovey/roost/internal/config"
-	"github.com/paulhovey/roost/internal/extract"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/extract"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 func TestMain(m *testing.M) {

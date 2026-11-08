@@ -1,0 +1,51 @@
+# Roost configuration. Copy to roost.toml. Unknown keys are errors, so a typo
+# in a security setting cannot silently fall back to a default.
+
+[server]
+listen = "127.0.0.1:8484"
+# Any non-loopback address needs TLS, or allow_plaintext if TLS ends at a proxy
+# in front of Roost.
+# tls_cert = "/etc/roost/cert.pem"
+# tls_key = "/etc/roost/key.pem"
+# allow_plaintext = false
+
+[storage]
+# Holds the index, which contains document text in plaintext. Use an encrypted
+# volume. Created with mode 0700.
+data_dir = "/var/lib/roost"
+
+[index]
+rescan_interval = "15m"   # the source of truth; required for NFS and SMB
+watch = true              # local filesystems only; a speed-up, not a guarantee
+watch_debounce = "5s"
+# workers = 4             # default: half the CPUs
+max_file_mb = 512         # larger files are recorded as too_large
+max_text_mb = 64          # text kept per file; longer files are flagged truncated
+extract_timeout = "2m"    # per file
+worker_memory_mb = 4096   # per extraction process
+
+# A collection is the unit of access control: tokens are granted collections,
+# so lay out paths by audience. Roost does not read file system ACLs.
+[[collections]]
+name = "legal"
+path = "/srv/documents/legal"
+exclude = ["*.tmp", "drafts"]  # matches a relative path or any single name
+
+[[collections]]
+name = "hr"
+path = "/srv/documents/hr"
+
+[audit]
+log_queries = true        # search text can be sensitive; see SECURITY.md
+# jsonl_path = "/var/log/roost/audit.jsonl"  # send SIGHUP after rotating
+
+# Optional semantic search through an on-prem service. This is the only feature
+# that makes outbound connections, and it sends document text to the endpoint.
+# [embeddings]
+# enabled = true
+# endpoint = "http://10.0.0.5:11434/v1/embeddings"  # any OpenAI-compatible API
+# model = "nomic-embed-text"
+# api_key_env = "ROOST_EMBEDDINGS_KEY"   # name of an environment variable
+# batch_size = 32
+# timeout = "60s"
+# allow_public_endpoint = false          # private and loopback IPs only

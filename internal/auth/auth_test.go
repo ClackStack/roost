@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 func open(t *testing.T) *store.Store {

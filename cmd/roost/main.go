@@ -19,15 +19,15 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/paulhovey/roost/internal/auth"
-	"github.com/paulhovey/roost/internal/config"
-	"github.com/paulhovey/roost/internal/core"
-	"github.com/paulhovey/roost/internal/embed"
-	"github.com/paulhovey/roost/internal/extract"
-	"github.com/paulhovey/roost/internal/indexer"
-	"github.com/paulhovey/roost/internal/mcpserver"
-	"github.com/paulhovey/roost/internal/rest"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/auth"
+	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/core"
+	"github.com/ClackStack/roost/internal/embed"
+	"github.com/ClackStack/roost/internal/extract"
+	"github.com/ClackStack/roost/internal/indexer"
+	"github.com/ClackStack/roost/internal/mcpserver"
+	"github.com/ClackStack/roost/internal/rest"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 // version is set at build time with -ldflags.
@@ -38,6 +38,7 @@ const usage = `roost: internal documents for AI tools, with no outbound calls by
 Usage: roost <command> [flags]
 
 Commands:
+  init                   Write a starter roost.toml
   serve                  Index documents and serve MCP and REST over HTTP
   mcp                    Serve MCP over stdio (needs ROOST_TOKEN)
   index [--prune]        Run one indexing pass, then exit
@@ -72,6 +73,8 @@ func run(args []string) error {
 	defer stop()
 	cmd, rest := args[0], args[1:]
 	switch cmd {
+	case "init":
+		return cmdInit(rest)
 	case "serve":
 		return cmdServe(ctx, rest)
 	case "mcp":
@@ -156,6 +159,18 @@ func (a *app) logEgress() {
 	a.log.Info("egress: none")
 }
 
+func cmdInit(args []string) error {
+	fs := flag.NewFlagSet("init", flag.ExitOnError)
+	cfgPath := fs.String("config", "", "config file")
+	fs.Parse(args)
+	path := config.Find(*cfgPath)
+	if err := config.WriteExample(path); err != nil {
+		return err
+	}
+	fmt.Println("wrote", path)
+	return nil
+}
+
 func cmdServe(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	cfgPath := fs.String("config", "", "config file")
@@ -176,6 +191,23 @@ func cmdServe(ctx context.Context, args []string) error {
 		return err
 	}
 	defer svc.Close()
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hup:
+				if err := svc.ReopenAudit(); err != nil {
+					a.log.Error("reopen audit log", "err", err)
+				} else if a.cfg.Audit.JSONLPath != "" {
+					a.log.Info("reopened audit log", "path", a.cfg.Audit.JSONLPath)
+				}
+			}
+		}
+	}()
 	ix, err := a.newIndexer()
 	if err != nil {
 		return err

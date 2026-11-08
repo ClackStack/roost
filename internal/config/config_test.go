@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,12 +62,15 @@ func TestNonLoopbackAllowedWithExplicitChoice(t *testing.T) {
 	}
 }
 
-// TestExampleConfig keeps the shipped example valid, with its optional blocks
-// switched on as well as off.
+// TestExampleConfig keeps the shipped example valid, in sync with the embedded
+// copy, and with its optional blocks switched on as well as off.
 func TestExampleConfig(t *testing.T) {
 	b, err := os.ReadFile("../../roost.example.toml")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !bytes.Equal(b, Example) {
+		t.Fatal("internal/config/example.toml differs from roost.example.toml")
 	}
 	if _, err := load(t, string(b)); err != nil {
 		t.Fatalf("as shipped: %v", err)
@@ -86,5 +90,25 @@ func TestExampleConfig(t *testing.T) {
 	}
 	if !c.Embeddings.Enabled || c.Server.TLSCert == "" {
 		t.Fatalf("options did not apply: %+v", c)
+	}
+}
+
+func TestWriteExample(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "roost.toml")
+	if err := WriteExample(p); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %o, want 0600", fi.Mode().Perm())
+	}
+	if _, err := Load(p); err != nil {
+		t.Fatalf("written config is invalid: %v", err)
+	}
+	if err := WriteExample(p); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("overwrite succeeded or wrong error: %v", err)
 	}
 }

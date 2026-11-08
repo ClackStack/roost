@@ -6,7 +6,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/paulhovey/roost/internal/extract"
+	"github.com/ClackStack/roost/internal/extract"
 )
 
 func squash(s string) string {

@@ -20,9 +20,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/paulhovey/roost/internal/auth"
-	"github.com/paulhovey/roost/internal/config"
-	"github.com/paulhovey/roost/internal/store"
+	"github.com/ClackStack/roost/internal/auth"
+	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 // ErrNotFound means the document does not exist or the caller may not see it.
@@ -89,8 +89,31 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, vectors VectorSe
 
 // Close releases the audit file.
 func (s *Service) Close() error {
+	s.jsonlMu.Lock()
+	defer s.jsonlMu.Unlock()
 	if s.jsonl != nil {
 		return s.jsonl.Close()
+	}
+	return nil
+}
+
+// ReopenAudit reopens the JSONL audit file, so log rotation with SIGHUP starts
+// writing to the new file without dropping requests.
+func (s *Service) ReopenAudit() error {
+	p := s.cfg.Audit.JSONLPath
+	if p == "" {
+		return nil
+	}
+	s.jsonlMu.Lock()
+	defer s.jsonlMu.Unlock()
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("reopen audit log: %w", err)
+	}
+	old := s.jsonl
+	s.jsonl = f
+	if old != nil {
+		_ = old.Close()
 	}
 	return nil
 }

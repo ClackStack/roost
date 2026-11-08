@@ -22,16 +22,16 @@ make test      # go vet + go test ./...
 make race      # tests with race detector
 make e2e       # real binary under strace; needs strace, curl, openssl, python3
 make fuzz      # 5m fuzz of internal/extract (FuzzExtract)
-make release   # cross-compile linux/darwin/windows into dist/
+make release   # cross-compile linux amd64+arm64 into dist/
 make clean
 ```
 
-Website (run inside `website/`): `npm run dev`, `npm run build` (static output
-to `build/`), `npm run preview`, `npm run check` (svelte-check; the only
-typecheck). `.npmrc` sets `engine-strict=true`. Both `package-lock.json` and
-`pnpm-lock.yaml` exist.
+Website (run inside `website/`): `pnpm run dev`, `pnpm run build` (static output
+to `build/`), `pnpm run preview`, `pnpm run check` (svelte-check; the only
+typecheck). `.npmrc` sets `engine-strict=true`. Keep `pnpm-lock.yaml` current.
 
-Running locally: `make build && cp roost.example.toml roost.toml` (edit
+Running locally: `make build && ./roost init` (writes `roost.toml` from
+`internal/config/example.toml`, kept in sync with `roost.example.toml`; edit
 `data_dir` + collections), `./roost token create --name x --collections a,b`
 (secret prints exactly once), `./roost serve`. CLI gotcha: flags go *before*
 positional args (`roost token revoke --config x.toml ID`).
@@ -44,7 +44,7 @@ Don't hand-edit them.
 
 - `ci.yml` runs on every push to `main` and every PR, Linux only:
   `make test` + `make race` in one job, `make e2e` (installs strace) in
-  another.
+  another, and `pnpm run check` + `pnpm run build` for `website/` in a third.
 - `release.yml` runs on `v*` tags: the same two gate jobs, then
   `make release offline-bundle VERSION=<tag>` and a GitHub Release holding
   `dist/*` (amd64+arm64 binaries, SHA256SUMS, offline source bundle). A tag
@@ -203,8 +203,8 @@ extraction output changes.
 - Pushing to `main` with website changes triggers `.github/workflows/website.yml`
   (GitHub Actions): pnpm install/check/build, then `bunny sites deploy build
   --site roost` to the Bunny CDN. It needs the repo secret `BUNNYNET_API_KEY`
-  (account-wide); CI installs with pnpm, so keep
-  `pnpm-lock.yaml` current (the npm lockfile is not what CI uses).
+  (account-wide); CI installs with `pnpm install --frozen-lockfile`, so keep
+  `pnpm-lock.yaml` current.
 - **No `svelte.config.js`**: all SvelteKit config (adapter-static, CSP, compiler
   options) lives in `website/vite.config.ts`.
 - Svelte 5 runes mode is forced project-wide in that config; use `$props`,
