@@ -40,6 +40,18 @@ positional args (`roost token revoke --config x.toml ID`).
 LibreOffice + reportlab; fixtures are committed so tests don't need those tools.
 Don't hand-edit them.
 
+## CI/CD (GitHub Actions)
+
+- `ci.yml` runs on every push to `main` and every PR, Linux only:
+  `make test` + `make race` in one job, `make e2e` (installs strace) in
+  another.
+- `release.yml` runs on `v*` tags: the same two gate jobs, then
+  `make release offline-bundle VERSION=<tag>` and a GitHub Release holding
+  `dist/*` (amd64+arm64 binaries, SHA256SUMS, offline source bundle). A tag
+  can never publish untested code.
+- Linux-only is deliberate; the platform list is `PLATFORMS` in the Makefile
+  and stays the single source of truth for both local and CI releases.
+
 ## Testing the MCP interface with quack
 
 quack, the author's other project, is a terminal coding agent (a separate

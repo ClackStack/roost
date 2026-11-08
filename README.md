@@ -136,7 +136,9 @@ Flags go before positional arguments, as in `roost token revoke --config x.toml 
 
 ## Deploying
 
-- **Binaries:** `make release` cross-compiles for Linux, macOS, and Windows.
+- **Binaries:** `make release` cross-compiles for Linux (amd64 and arm64);
+  pushing a `v*` git tag publishes them to GitHub Releases after CI runs
+  `make test`, `make race`, and `make e2e` against the tagged commit.
 - **systemd:** `deploy/roost.service` is hardened and blocks outbound traffic at
   the OS level.
 - **Container:** see the `Dockerfile`. The image holds only the binary.
