@@ -51,6 +51,14 @@ Don't hand-edit them.
   can never publish untested code.
 - Linux-only is deliberate; the platform list is `PLATFORMS` in the Makefile
   and stays the single source of truth for both local and CI releases.
+- `install.sh` (repo root) is the `curl | sh` installer for release binaries.
+  The website build emits it at `https://roost.clackstack.dev/install.sh`
+  (`website/vite.config.ts`), and that is the URL the README gives. It
+  depends on release artifacts keeping their names (`roost-<tag>-linux-<arch>`
+  plus `SHA256SUMS`) and on `roost version` existing. Before changing its URL
+  building or artifact logic, test it against a fake release served by
+  `python3 -m http.server` (sed the base URL in a copy; exercise happy path,
+  corrupt checksum, and missing checksum).
 
 ## Testing the MCP interface with quack
 
@@ -130,7 +138,10 @@ logging. The child receives the file via stdin (never a path), an empty
 environment, an rlimit memory cap (`limit_unix.go` / no-op `limit_other.go`
 build tags), a timeout, and a capped-size JSON reply. `TestMain` in
 `internal/extract` and `internal/indexer` tests re-exec the *test binary* the
-same way, so unit tests exercise the real child-process path.
+same way, so unit tests exercise the real child-process path. Under `-race`
+the child's runtime alone reserves ~2 GB of address space before any parsing,
+so tests size the sandbox with `testWorkerMemoryMB` (build-tagged files)
+instead of the production default.
 
 `extract.Version` is stored per document; bump it to force a full re-index when
 extraction output changes.

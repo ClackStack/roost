@@ -30,7 +30,7 @@ func runner(t *testing.T) *Runner {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Runner{Exe: exe, Limits: testLimits, Timeout: 30 * time.Second, MemoryMB: 2048}
+	return &Runner{Exe: exe, Limits: testLimits, Timeout: 30 * time.Second, MemoryMB: testWorkerMemoryMB}
 }
 
 func extractFile(t *testing.T, path string) (*Result, error) {

@@ -17,6 +17,18 @@ REST, with per-token access control and an audit log.
 
 ## Quick start
 
+Install the latest release binary (Linux amd64/arm64; re-run to upgrade):
+
+```sh
+curl -fsSL https://roost.clackstack.dev/install.sh | sh
+```
+
+The script checks the binary against the release's SHA256SUMS, installs it to
+`/usr/local/bin` (or `~/.local/bin` without root) and prints the setup steps.
+Pin a version with `| sh -s -- v1.2.3`.
+
+Or build from source:
+
 ```sh
 make build                             # needs Go 1.26+
 cp roost.example.toml roost.toml       # then set your data_dir and collections

@@ -1,11 +1,29 @@
+import { readFileSync } from 'node:fs';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+
+// Serves the installer at https://roost.clackstack.dev/install.sh, so the
+// README's `curl | sh` command points at the site instead of
+// raw.githubusercontent. scripts/ — the repo root — stays the single copy;
+// the release assets stay pinned to their tags.
+const installScripts = (): Plugin => ({
+	name: 'install-scripts',
+	buildStart() {
+		if (this.environment?.config.build.ssr) return;
+		this.emitFile({
+			type: 'asset',
+			fileName: 'install.sh',
+			source: readFileSync(new URL('../install.sh', import.meta.url))
+		});
+	}
+});
 
 export default defineConfig({
 	// Keep assets as files: the CSP below refuses data: URLs.
 	build: { assetsInlineLimit: 0 },
 	plugins: [
+		installScripts(),
 		sveltekit({
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.

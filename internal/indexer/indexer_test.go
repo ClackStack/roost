@@ -51,7 +51,7 @@ func setup(t *testing.T) *fixture {
 	}
 	t.Cleanup(func() { st.Close() })
 	exe, _ := os.Executable()
-	r := &extract.Runner{Exe: exe, Limits: extract.Limits{MaxText: 1 << 20, MaxUnzip: 1 << 24}, Timeout: 20 * time.Second, MemoryMB: 2048}
+	r := &extract.Runner{Exe: exe, Limits: extract.Limits{MaxText: 1 << 20, MaxUnzip: 1 << 24}, Timeout: 20 * time.Second, MemoryMB: testWorkerMemoryMB}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return &fixture{t: t, dir: dir, cfg: &cfg, st: st, ix: New(&cfg, st, r, log), col: cfg.Collections[0]}
 }
