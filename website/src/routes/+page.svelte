@@ -101,26 +101,10 @@
 		['Tests that were tested', 'We broke 17 security controls on purpose. The test suite caught all 17.', 'M26 6l6 13 14 2-10 10 2 14-12-7-12 7 2-14L6 21l14-2z']
 	];
 
-	const cant = [
-		'Read scanned PDFs. There’s no OCR yet.',
-		'Read old .doc, .xls or .ppt files. Convert them first.',
-		'Read email attachments.',
-		'Do SSO. Authentication is by API token.',
-		'Run on more than one node.',
-		'Follow NTFS or SharePoint permissions. Access is per collection.',
-		'Encrypt its index. Put it on an encrypted volume.'
-	];
-
-	const untested = [
-		'MCP client apps, including Claude Code. We used the official Go MCP client, raw JSON-RPC and curl.',
-		'Running on Windows and macOS. Release binaries are Linux-only; other platforms build from source and haven’t been run.',
-		'Real NFS and SMB shares.',
-		'The Docker image, which hasn’t been built yet.'
-	];
 </script>
 
 <svelte:head>
-	<title>Roost: your docs stay home, your AI still reads them</title>
+	<title>Roost: your docs stay home, your AI still gets access</title>
 	<meta
 		name="description"
 		content="Roost is a self-hosted document server for AI tools. One static binary indexes Word, Excel, PowerPoint and PDF files and serves them over MCP and REST, with no outbound calls by default."
@@ -267,24 +251,6 @@
 		</dl>
 	</div>
 </Insert>
-
-<section id="limits" class="page wrap limits" aria-labelledby="limits-h">
-	<div class="head">
-		<Bird mood="sad" size={120} />
-		<h2 id="limits-h">Things Roost can’t do. <mark class="hl swipe">Yet.</mark></h2>
-	</div>
-	<div class="cols">
-		<div>
-			<h3>It can’t</h3>
-			<ul>{#each cant as c (c)}<li>{c}</li>{/each}</ul>
-		</div>
-		<div>
-			<h3>We haven’t tested</h3>
-			<ul class="q">{#each untested as c (c)}<li>{c}</li>{/each}</ul>
-			<p>Anything Roost can’t read shows up in <code>roost status</code>. It never drops a file silently.</p>
-		</div>
-	</div>
-</section>
 
 <Insert color="var(--pink)" id="get" label="Download Roost" tilt="0.35deg">
 	<div class="page wrap get">
@@ -546,38 +512,6 @@
 		max-width: 52ch;
 	}
 
-	.head {
-		display: flex;
-		align-items: center;
-		gap: 18px;
-		margin-bottom: 20px;
-	}
-	.head h2 {
-		margin: 0;
-	}
-	.head :global(svg) {
-		flex: none;
-	}
-	.limits .hl {
-		--hl: var(--pink);
-	}
-	.cols {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-		gap: clamp(28px, 5vw, 72px);
-	}
-	.cols ul {
-		margin: 0 0 1em;
-		padding-left: 1.4em;
-		list-style-image: url('../lib/assets/x.svg');
-	}
-	.cols .q {
-		list-style-image: url('../lib/assets/q.svg');
-	}
-	.cols li {
-		margin-bottom: 0.45em;
-	}
-
 	.get {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -610,7 +544,6 @@
 		.leaks,
 		.speed,
 		.mcp,
-		.cols,
 		.get {
 			grid-template-columns: minmax(0, 1fr);
 		}

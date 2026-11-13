@@ -10,7 +10,6 @@
 		<a href="#search">search</a>
 		<a href="#mcp">MCP</a>
 		<a href="#compare">compare</a>
-		<a href="#limits">limits</a>
 		<a href="#get" class="get">download</a>
 	</nav>
 </header>
@@ -18,7 +17,7 @@
 <main id="top" class="hero wrap">
 	<h1>
 		<span>Your docs stay home.</span>
-		<span><mark class="hl">Your AI</mark> still reads them.</span>
+		<span><mark class="hl">Your AI</mark> still gets access.</span>
 	</h1>
 
 	<ol class="panels">
