@@ -1,0 +1,62 @@
+name: "roost"
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${PKG_VERSION}"
+section: "utils"
+priority: "optional"
+maintainer: "ClackStack <paul@paulhovey.org>"
+vendor: "ClackStack"
+homepage: "https://roost.clackstack.dev"
+license: "Apache-2.0"
+description: |
+  Self-hosted document search server for AI tools over MCP and REST.
+  Indexes Word, Excel, PowerPoint, PDF, email, and text files locally
+  with per-token access control, an audit log, and no outbound network
+  calls by default.
+
+contents:
+  - src: ${PKG_BINARY}
+    dst: /usr/bin/roost
+    expand: true
+    file_info:
+      mode: 0755
+  - src: ${PKG_SERVICE}
+    dst: /usr/lib/systemd/system/roost.service
+    expand: true
+    file_info:
+      mode: 0644
+  - dst: /etc/roost
+    type: dir
+    file_info:
+      mode: 0750
+      owner: root
+      group: roost
+  - src: ./roost.example.toml
+    dst: /etc/roost/roost.toml
+    type: config|noreplace
+    file_info:
+      mode: 0640
+      owner: root
+      group: roost
+  - src: ./LICENSE
+    dst: /usr/share/doc/roost/LICENSE
+    file_info:
+      mode: 0644
+
+scripts:
+  preinstall: ./packaging/scripts/preinstall.sh
+  postinstall: ./packaging/scripts/postinstall.sh
+  preremove: ./packaging/scripts/preremove.sh
+  postremove: ./packaging/scripts/postremove.sh
+
+rpm:
+  summary: "Self-hosted document search server for AI tools over MCP and REST"
+  group: "Applications/System"
+
+overrides:
+  deb:
+    recommends:
+      - systemd
+  rpm:
+    depends:
+      - shadow-utils

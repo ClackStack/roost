@@ -17,20 +17,22 @@ anything security-adjacent.
 ## Commands
 
 ```sh
-make build     # CGO_ENABLED=0 static build -> ./roost
-make test      # go vet + go test ./...
-make race      # tests with race detector
-make e2e       # real binary under strace; needs strace, curl, openssl, python3
-make fuzz      # 5m fuzz of internal/extract (FuzzExtract)
-make release   # cross-compile linux amd64+arm64 into dist/
-make clean
+task build         # CGO_ENABLED=0 static build -> ./roost
+task test          # go vet + go test ./...
+task race          # tests with race detector
+task e2e           # real binary under strace; needs strace, curl, openssl, python3
+task fuzz          # 5m fuzz of internal/extract (FuzzExtract)
+task release       # cross-compile linux amd64+arm64 binaries and .deb/.rpm into dist/
+task packages      # build .deb/.rpm packages into dist/
+task package-test  # test .deb/.rpm in Debian, Ubuntu, Fedora, and Rocky containers
+task clean
 ```
 
 Website (run inside `website/`): `pnpm run dev`, `pnpm run build` (static output
 to `build/`), `pnpm run preview`, `pnpm run check` (svelte-check; the only
 typecheck). `.npmrc` sets `engine-strict=true`. Keep `pnpm-lock.yaml` current.
 
-Running locally: `make build && ./roost init` (writes `roost.toml` from
+Running locally: `task build && ./roost init` (writes `roost.toml` from
 `internal/config/example.toml`, kept in sync with `roost.example.toml`; edit
 `data_dir` + collections), `./roost token create --name x --collections a,b`
 (secret prints exactly once), `./roost serve`. CLI gotcha: flags go *before*
@@ -43,13 +45,14 @@ Don't hand-edit them.
 ## CI/CD (GitHub Actions)
 
 - `ci.yml` runs on every push to `main` and every PR, Linux only:
-  `make test` + `make race` in one job, `make e2e` (installs strace) in
-  another, and `pnpm run check` + `pnpm run build` for `website/` in a third.
-- `release.yml` runs on `v*` tags: the same two gate jobs, then
-  `make release offline-bundle VERSION=<tag>` and a GitHub Release holding
-  `dist/*` (amd64+arm64 binaries, SHA256SUMS, offline source bundle). A tag
-  can never publish untested code.
-- Linux-only is deliberate; the platform list is `PLATFORMS` in the Makefile
+  `task test` + `task race` in one job, `task e2e` (installs strace) in
+  another, `task packages` + `task package-test` in a third, and
+  `pnpm run check` + `pnpm run build` for `website/` in a fourth.
+- `release.yml` runs on `v*` tags: the same gate jobs, then
+  `task release offline-bundle VERSION=<tag>` and a GitHub Release holding
+  `dist/*` (amd64+arm64 binaries, `.deb`/`.rpm` packages, SHA256SUMS, offline
+  source bundle). A tag can never publish untested code.
+- Linux-only is deliberate; the platform list is `PLATFORMS` in `Taskfile.yml`
   and stays the single source of truth for both local and CI releases.
 - `install.sh` (repo root) is the `curl | sh` installer for release binaries.
   The website build emits it at `https://roost.clackstack.dev/install.sh`

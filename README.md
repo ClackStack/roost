@@ -30,7 +30,7 @@ Pin a version with `| sh -s -- v1.2.3`.
 Or build from source:
 
 ```sh
-make build                             # needs Go 1.26+
+task build                             # needs Go 1.26+ and Task
 ./roost setup                          # interactive wizard (or ./roost init)
 
 ./roost serve
@@ -150,13 +150,14 @@ Flags go before positional arguments, as in `roost token revoke --config x.toml 
 
 ## Deploying
 
-- **Binaries:** `make release` cross-compiles for Linux (amd64 and arm64);
-  pushing a `v*` git tag publishes them to GitHub Releases after CI runs
-  `make test`, `make race`, and `make e2e` against the tagged commit.
+- **Binaries & packages:** `task release` cross-compiles for Linux (amd64 and arm64)
+  and builds `.deb` and `.rpm` packages; pushing a `v*` git tag publishes them
+  to GitHub Releases after CI runs `task test`, `task race`, and `task e2e`
+  against the tagged commit.
 - **systemd:** `deploy/roost.service` is hardened and blocks outbound traffic at
   the OS level.
 - **Container:** see the `Dockerfile`. The image holds only the binary.
-- **Air-gapped builds:** `make offline-bundle` packages the source with every
+- **Air-gapped builds:** `task offline-bundle` packages the source with every
   dependency.
 
 Rescans are the source of truth, so files on NFS and SMB shares are picked up even
@@ -199,10 +200,12 @@ longer to index than plain text. Semantic search holds vectors in memory, at abo
 ## Developing
 
 ```sh
-make test    # unit tests
-make race    # with the race detector
-make e2e     # real binary under strace; needs strace, curl, openssl, python3
-make fuzz    # fuzz the extractors
+task test          # unit tests
+task race          # with the race detector
+task e2e           # real binary under strace; needs strace, curl, openssl, python3
+task fuzz          # fuzz the extractors
+task packages      # build .deb and .rpm packages into dist/
+task package-test  # test .deb and .rpm lifecycle in Debian/Ubuntu/Fedora/Rocky containers
 ```
 
 `scripts/gen-fixtures.sh` regenerates test documents with LibreOffice.

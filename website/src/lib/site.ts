@@ -5,7 +5,7 @@ const releases = `${repo}/releases/download/${version}`;
 
 export type Platform = { id: string; label: string; file: string };
 
-// File names match `make release` (PLATFORMS in Makefile).
+// File names match `task release` (PLATFORMS in Taskfile.yml).
 export const platforms: Platform[] = [
 	{ id: 'linux-amd64', label: 'Linux x86-64', file: `roost-${version}-linux-amd64` },
 	{ id: 'linux-arm64', label: 'Linux ARM64', file: `roost-${version}-linux-arm64` }

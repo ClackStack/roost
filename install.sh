@@ -31,7 +31,7 @@ for tool in curl sha256sum; do
 done
 
 [ "$(uname -s)" = "Linux" ] ||
-  die "release binaries are Linux-only; on other platforms build from source: make build"
+  die "release binaries are Linux-only; on other platforms build from source: task build"
 case "$(uname -m)" in
   x86_64) arch=amd64 ;;
   aarch64 | arm64) arch=arm64 ;;

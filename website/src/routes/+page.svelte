@@ -62,7 +62,7 @@
 			id: 'rest',
 			label: 'REST',
 			note: 'For RAG pipelines and scripts. The spec is at /openapi.json.',
-			scrawl: 'This route is covered by make e2e, with curl.',
+			scrawl: 'This route is covered by task e2e, with curl.',
 			lines: [
 				'curl -H "Authorization: Bearer $TOKEN" \\',
 				'  -d \'{"query":"acquisition timeline"}\' \\',
@@ -125,10 +125,10 @@
 	<div class="proof">
 		<ol>
 			<li><strong>The build checks.</strong> <code>egress_test.go</code> fails if our code makes outbound calls anywhere outside one opt-in package.</li>
-			<li><strong>The binary gets traced.</strong> <code>make e2e</code> runs the real thing under strace through indexing, serving and stdio. It made 0 network connections, across 52 passing checks.</li>
+			<li><strong>The binary gets traced.</strong> <code>task e2e</code> runs the real thing under strace through indexing, serving and stdio. It made 0 network connections, across 52 passing checks.</li>
 			<li><strong>The trace gets tested too.</strong> With embeddings on, the same trace does see connections, and only to the endpoint you configured.</li>
 		</ol>
-		<Code label="Check it yourself, from a source checkout" lines={['make e2e   # needs strace, curl, openssl, python3']} mark={0} />
+		<Code label="Check it yourself, from a source checkout" lines={['task e2e   # needs strace, curl, openssl, python3']} mark={0} />
 		<div class="exception frame">
 			<Bird mood="worried" size={72} />
 			<p>
@@ -281,7 +281,7 @@
 			<p class="lede">No sign-up, no account. One file on a Linux machine inside your network.</p>
 			<Download id="platform-bottom" />
 			<p class="small">
-				<a href={checksumsUrl}>SHA-256 checksums</a> · <a href={readmeUrl}>Full docs</a> · Air-gapped? <code>make offline-bundle</code> packages the source with every dependency.
+				<a href={checksumsUrl}>SHA-256 checksums</a> · <a href={readmeUrl}>Full docs</a> · Air-gapped? <code>task offline-bundle</code> packages the source with every dependency.
 			</p>
 		</div>
 		<div>
