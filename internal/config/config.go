@@ -2,6 +2,7 @@
 package config
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -48,8 +51,8 @@ type Config struct {
 // Server controls the HTTP listener.
 type Server struct {
 	Listen         string `toml:"listen"`
-	TLSCert        string `toml:"tls_cert"`
-	TLSKey         string `toml:"tls_key"`
+	TLSCert        string `toml:"tls_cert,omitempty"`
+	TLSKey         string `toml:"tls_key,omitempty"`
 	AllowPlaintext bool   `toml:"allow_plaintext"`
 }
 
@@ -74,16 +77,16 @@ type Index struct {
 type Collection struct {
 	Name    string   `toml:"name"`
 	Path    string   `toml:"path"`
-	Exclude []string `toml:"exclude"`
+	Exclude []string `toml:"exclude,omitempty"`
 }
 
 // Embeddings configures the optional on-prem embeddings endpoint. It is the
 // only feature in Roost that makes outbound connections.
 type Embeddings struct {
 	Enabled             bool     `toml:"enabled"`
-	Endpoint            string   `toml:"endpoint"`
-	Model               string   `toml:"model"`
-	APIKeyEnv           string   `toml:"api_key_env"`
+	Endpoint            string   `toml:"endpoint,omitempty"`
+	Model               string   `toml:"model,omitempty"`
+	APIKeyEnv           string   `toml:"api_key_env,omitempty"`
 	BatchSize           int      `toml:"batch_size"`
 	Timeout             Duration `toml:"timeout"`
 	AllowPublicEndpoint bool     `toml:"allow_public_endpoint"`
@@ -92,7 +95,7 @@ type Embeddings struct {
 // Audit configures the access log.
 type Audit struct {
 	LogQueries bool   `toml:"log_queries"`
-	JSONLPath  string `toml:"jsonl_path"`
+	JSONLPath  string `toml:"jsonl_path,omitempty"`
 }
 
 // Duration parses TOML strings such as "15m".
@@ -106,6 +109,11 @@ func (d *Duration) UnmarshalText(b []byte) error {
 	}
 	d.Duration = v
 	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (d Duration) MarshalText() ([]byte, error) {
+	return []byte(d.Duration.String()), nil
 }
 
 // Default returns the configuration used for any value the file leaves unset.
@@ -147,6 +155,14 @@ func Load(path string) (*Config, error) {
 
 var collectionName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
+// ValidCollectionName reports whether name is valid for a configured collection.
+func ValidCollectionName(name string) error {
+	if !collectionName.MatchString(name) {
+		return fmt.Errorf("config: collection name %q must match %s", name, collectionName)
+	}
+	return nil
+}
+
 // Validate checks the config and normalizes paths to absolute form.
 func (c *Config) Validate() error {
 	if len(c.Collections) == 0 {
@@ -155,8 +171,8 @@ func (c *Config) Validate() error {
 	seen := map[string]bool{}
 	for i := range c.Collections {
 		col := &c.Collections[i]
-		if !collectionName.MatchString(col.Name) {
-			return fmt.Errorf("config: collection name %q must match %s", col.Name, collectionName)
+		if err := ValidCollectionName(col.Name); err != nil {
+			return err
 		}
 		if seen[col.Name] {
 			return fmt.Errorf("config: duplicate collection %q", col.Name)
@@ -176,6 +192,9 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
+	if c.Storage.DataDir == "" {
+		return errors.New("config: storage.data_dir must not be empty")
+	}
 	abs, err := filepath.Abs(c.Storage.DataDir)
 	if err != nil {
 		return fmt.Errorf("config: data_dir: %w", err)
@@ -194,8 +213,17 @@ func (c *Config) Validate() error {
 	if c.Index.RescanInterval.Duration < time.Second {
 		return errors.New("config: index.rescan_interval must be at least 1s")
 	}
+	if c.Index.WatchDebounce.Duration < 0 || (c.Index.Watch && c.Index.WatchDebounce.Duration == 0) {
+		return errors.New("config: index.watch_debounce must be positive")
+	}
 	if c.Index.MaxFileMB < 1 || c.Index.MaxTextMB < 1 {
 		return errors.New("config: index.max_file_mb and index.max_text_mb must be at least 1")
+	}
+	if c.Index.ExtractTimeout.Duration <= 0 {
+		return errors.New("config: index.extract_timeout must be positive")
+	}
+	if c.Index.WorkerMemoryMB < 1 {
+		return errors.New("config: index.worker_memory_mb must be at least 1")
 	}
 	if c.Embeddings.Enabled {
 		u, err := url.Parse(c.Embeddings.Endpoint)
@@ -207,6 +235,9 @@ func (c *Config) Validate() error {
 		}
 		if c.Embeddings.BatchSize < 1 {
 			return errors.New("config: embeddings.batch_size must be at least 1")
+		}
+		if c.Embeddings.Timeout.Duration <= 0 {
+			return errors.New("config: embeddings.timeout must be positive")
 		}
 	}
 	return nil
@@ -257,4 +288,126 @@ func Find(flagValue string) string {
 		return v
 	}
 	return "roost.toml"
+}
+
+// Clone returns a deep copy of the configuration.
+func (c *Config) Clone() *Config {
+	if c == nil {
+		return nil
+	}
+	cp := *c
+	cp.Collections = make([]Collection, len(c.Collections))
+	for i, col := range c.Collections {
+		cp.Collections[i] = Collection{
+			Name:    col.Name,
+			Path:    col.Path,
+			Exclude: slices.Clone(col.Exclude),
+		}
+	}
+	return &cp
+}
+
+// Render validates and formats cfg as TOML.
+func Render(cfg *Config) ([]byte, error) {
+	if cfg == nil {
+		return nil, errors.New("config: nil configuration")
+	}
+	cp := cfg.Clone()
+	if err := cp.Validate(); err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	buf.WriteString("# Roost configuration. Unknown keys are errors, so a typo in a\n")
+	buf.WriteString("# security setting cannot silently fall back to a default.\n\n")
+	enc := toml.NewEncoder(&buf)
+	enc.Indent = ""
+	if err := enc.Encode(cp); err != nil {
+		return nil, fmt.Errorf("encode config: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// Save validates cfg and writes it atomically to path with mode 0600.
+func Save(path string, cfg *Config) error {
+	data, err := Render(cfg)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("create config dir: %w", err)
+		}
+	}
+	tmp, err := os.CreateTemp(dir, ".roost.toml.*")
+	if err != nil {
+		return fmt.Errorf("create temp config: %w", err)
+	}
+	tmpName := tmp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			tmp.Close()
+			os.Remove(tmpName)
+		}
+	}()
+	if err := tmp.Chmod(0o600); err != nil {
+		return fmt.Errorf("chmod config: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fmt.Errorf("sync config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close config: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("replace config: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+// CheckDataDirOverlap rejects configurations where storage.data_dir equals,
+// contains, or sits inside any collection path so Roost never indexes its own DB.
+func CheckDataDirOverlap(dataDir string, cols []Collection) error {
+	if dataDir == "" {
+		return nil
+	}
+	dAbs, dReal := normalizePair(dataDir)
+	for _, col := range cols {
+		if col.Path == "" {
+			continue
+		}
+		cAbs, cReal := normalizePair(col.Path)
+		if pathsOverlap(dAbs, cAbs) || pathsOverlap(dReal, cReal) {
+			return fmt.Errorf("collection %q (%s) overlaps storage.data_dir (%s)", col.Name, col.Path, dataDir)
+		}
+	}
+	return nil
+}
+
+func normalizePair(p string) (abs, resolved string) {
+	a, err := filepath.Abs(p)
+	if err != nil {
+		a = filepath.Clean(p)
+	}
+	if r, err := filepath.EvalSymlinks(a); err == nil {
+		return a, filepath.Clean(r)
+	}
+	return a, a
+}
+
+func pathsOverlap(a, b string) bool {
+	return isSameOrSubpath(a, b) || isSameOrSubpath(b, a)
+}
+
+func isSameOrSubpath(base, target string) bool {
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }

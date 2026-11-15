@@ -402,3 +402,34 @@ func TestAuditSeesBothTransports(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPBehindReverseProxyHostHeader(t *testing.T) {
+	e := setup(t)
+	initBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"proxy-test","version":"1"}}}`
+	send := func(token string) (*http.Response, string) {
+		req, err := http.NewRequest("POST", e.srv.URL+"/mcp", strings.NewReader(initBody))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = "roost.internal"
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp, string(b)
+	}
+	if resp, _ := send(""); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status = %d, want 401", resp.StatusCode)
+	}
+	resp, body := send(e.legalTok)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `"name":"roost"`) {
+		t.Fatalf("proxied MCP status = %d, body = %s", resp.StatusCode, body)
+	}
+}

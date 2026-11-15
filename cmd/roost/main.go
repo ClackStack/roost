@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -28,6 +29,7 @@ import (
 	"github.com/ClackStack/roost/internal/mcpserver"
 	"github.com/ClackStack/roost/internal/rest"
 	"github.com/ClackStack/roost/internal/store"
+	"github.com/ClackStack/roost/internal/tui"
 )
 
 // version is set at build time with -ldflags.
@@ -39,6 +41,7 @@ Usage: roost <command> [flags]
 
 Commands:
   init                   Write a starter roost.toml
+  setup [--wizard]       Interactive TUI wizard and configurator
   serve                  Index documents and serve MCP and REST over HTTP
   mcp                    Serve MCP over stdio (needs ROOST_TOKEN)
   index [--prune]        Run one indexing pass, then exit
@@ -75,6 +78,8 @@ func run(args []string) error {
 	switch cmd {
 	case "init":
 		return cmdInit(rest)
+	case "setup":
+		return cmdSetup(ctx, rest)
 	case "serve":
 		return cmdServe(ctx, rest)
 	case "mcp":
@@ -169,6 +174,38 @@ func cmdInit(args []string) error {
 	}
 	fmt.Println("wrote", path)
 	return nil
+}
+
+func cmdSetup(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("setup", flag.ExitOnError)
+	cfgPath := fs.String("config", "", "config file")
+	wizard := fs.Bool("wizard", false, "run the guided setup wizard even if config exists")
+	fs.Parse(args)
+	return tui.Run(ctx, tui.Options{
+		ConfigPath:  config.Find(*cfgPath),
+		ForceWizard: *wizard,
+		Index:       indexWithConfig,
+	})
+}
+
+func indexWithConfig(ctx context.Context, cfg *config.Config, st *store.Store) (map[string]indexer.Stats, error) {
+	a := &app{
+		cfg: cfg,
+		st:  st,
+		log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	ix, err := a.newIndexer()
+	if err != nil {
+		return nil, err
+	}
+	emb, err := a.newEmbedder()
+	if err != nil {
+		return nil, err
+	}
+	if emb != nil {
+		ix.AfterScan = emb.Run
+	}
+	return ix.ScanAll(ctx, false)
 }
 
 func cmdServe(ctx context.Context, args []string) error {

@@ -31,9 +31,8 @@ Or build from source:
 
 ```sh
 make build                             # needs Go 1.26+
-./roost init                           # writes roost.toml; set data_dir and collections
+./roost setup                          # interactive wizard (or ./roost init)
 
-./roost token create --name alice --collections legal,hr
 ./roost serve
 ```
 
@@ -135,6 +134,7 @@ Enabling this sends document text to that service. See
 
 ```
 roost init                     Write a starter roost.toml
+roost setup [--wizard]         Interactive TUI setup wizard and configurator
 roost serve                    Index documents and serve MCP and REST
 roost mcp                      Serve MCP over stdio (needs ROOST_TOKEN)
 roost index [--prune]          Run one indexing pass, then exit

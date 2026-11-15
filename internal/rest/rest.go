@@ -66,8 +66,8 @@ func Handler(cfg *config.Config, svc *core.Service, st *store.Store, version str
 		Stateless:    true,
 		JSONResponse: true,
 		// Behind a local reverse proxy the Host header is not localhost.
-		// Bearer auth already stops the DNS rebinding this check targets.
-		DisableLocalhostProtection: cfg.Server.AllowPlaintext,
+		// Bearer auth on /mcp already stops the DNS rebinding this check targets.
+		DisableLocalhostProtection: true,
 	})
 
 	api := &api{svc: svc, log: log}
