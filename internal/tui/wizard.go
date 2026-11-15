@@ -32,6 +32,7 @@ const (
 type switchToDashboardMsg struct {
 	cfg *config.Config
 	st  *store.Store
+	tab dashTab
 }
 
 type wizardSavedConfigMsg struct {
@@ -813,13 +814,17 @@ func (m wizardModel) updateFinish(msg tea.Msg) (wizardModel, tea.Cmd) {
 		m.errMsg = ""
 		m.indexReport = ""
 		return m, tea.Batch(m.spin.Tick, runIndexCmd(m.ctx, m.indexFn, &m.cfg, m.store))
-	case "d":
+	case "d", "e":
 		if m.indexing || m.store == nil {
 			return m, nil
 		}
+		targetTab := tabCollections
+		if key.String() == "e" {
+			targetTab = tabExplore
+		}
 		cfgCopy := m.cfg.Clone()
 		st := m.store
-		return m, func() tea.Msg { return switchToDashboardMsg{cfg: cfgCopy, st: st} }
+		return m, func() tea.Msg { return switchToDashboardMsg{cfg: cfgCopy, st: st, tab: targetTab} }
 	case "q", "esc", "ctrl+c":
 		return m, tea.Quit
 	}
@@ -1134,6 +1139,6 @@ func (m wizardModel) viewFinish() string {
 	b.WriteString(m.styles.label.Render("Next commands & AI client setup:") + "\n")
 	b.WriteString(m.styles.codeBox.Width(max(40, m.width-10)).Render(clientSnippets(&m.cfg, m.cfgPath, m.lastSecret)))
 	b.WriteString("\n\n")
-	b.WriteString(m.styles.help.Render("t create token  •  i index documents now  •  d open configurator  •  q quit"))
+	b.WriteString(m.styles.help.Render("t create token  •  i index documents now  •  e test search  •  d open configurator  •  q quit"))
 	return m.styles.panel.Width(max(44, m.width-4)).Render(b.String())
 }

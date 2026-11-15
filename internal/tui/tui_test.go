@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ClackStack/roost/internal/auth"
 	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/core"
 	"github.com/ClackStack/roost/internal/indexer"
 	"github.com/ClackStack/roost/internal/store"
 )
@@ -652,5 +654,541 @@ func TestForceWizardOnExistingAndInvalidConfig(t *testing.T) {
 	}
 	if !strings.Contains(h.view(), "already exists") {
 		t.Fatalf("expected overwrite warning when ForceWizard=true on existing file:\n%s", h.view())
+	}
+}
+
+func TestStatusProblemDetailFiltersAndCollectionReindex(t *testing.T) {
+	base := t.TempDir()
+	cfgPath := filepath.Join(base, "roost.toml")
+	dataDir := filepath.Join(base, "state")
+	legalDir := filepath.Join(base, "legal")
+	hrDir := filepath.Join(base, "hr")
+	for _, d := range []string{legalDir, hrDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cfg := config.Default()
+	cfg.Storage.DataDir = dataDir
+	cfg.Collections = []config.Collection{
+		{Name: "legal", Path: legalDir},
+		{Name: "hr", Path: hrDir},
+	}
+	if err := config.Save(cfgPath, &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := store.Open(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	longRel := "nested/archive/2026/scanned_contract_with_extremely_long_filename_for_wrap.pdf"
+	longErr := "Corrupt PDF cross-reference table at offset 4192831 with missing root catalog object"
+	for _, doc := range []store.Document{
+		{
+			ID: "prob-legal", Collection: "legal", RelPath: longRel, FileType: "pdf",
+			Size: 1024, Status: store.StatusNoText, Error: "scanned image only",
+			SHA256: "aaaa", IndexedAt: time.Now().Unix(),
+		},
+		{
+			ID: "prob-hr-fail", Collection: "hr", RelPath: "payroll.xlsx", Title: "Payroll Q1",
+			FileType: "xlsx", Size: 20480, Status: store.StatusFailed, Truncated: true,
+			Error: longErr, SHA256: "bbbb", IndexedAt: time.Now().Unix(),
+			Meta: map[string]string{"sheet": "Q1"},
+		},
+		{
+			ID: "prob-hr-enc", Collection: "hr", RelPath: "secret.pdf", FileType: "pdf",
+			Size: 512, Status: store.StatusEncrypted, Error: "password protected",
+			SHA256: "cccc", IndexedAt: time.Now().Unix(),
+		},
+	} {
+		if err := st.ReplaceDocument(t.Context(), doc, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st.Close()
+
+	var indexedRuns [][]string
+	h := newTestHarness(t, Options{
+		ConfigPath: cfgPath,
+		Index: func(_ context.Context, icfg *config.Config, _ *store.Store) (map[string]indexer.Stats, error) {
+			var cols []string
+			out := map[string]indexer.Stats{}
+			for _, c := range icfg.Collections {
+				cols = append(cols, c.Name)
+				out[c.Name] = indexer.Stats{Seen: 1, Indexed: 1}
+			}
+			indexedRuns = append(indexedRuns, cols)
+			return out, nil
+		},
+	})
+
+	// Resize small so list rows definitely truncate long path/error while modal shows full wrapped text.
+	h.send(tea.WindowSizeMsg{Width: 78, Height: 22}, false)
+	h.press("3") // Tab 3 Status
+
+	// Cycle status filter ('s'): first preset after "all" is "failed".
+	h.press("s")
+	v := h.view()
+	if !strings.Contains(v, "status: failed") || !strings.Contains(v, "payroll.xlsx") || strings.Contains(v, "secret.pdf") {
+		t.Fatalf("expected status filter 'failed' to isolate payroll.xlsx:\n%s", v)
+	}
+	h.press("esc") // Reset filter back to all
+
+	// Live '/' search across paths/errors.
+	h.press("/")
+	h.typeText("password protected")
+	v = h.view()
+	if !strings.Contains(v, "secret.pdf") || strings.Contains(v, "payroll.xlsx") {
+		t.Fatalf("expected search filter to isolate encrypted doc:\n%s", v)
+	}
+	h.press("esc")
+
+	// Move cursor to "hr/payroll.xlsx" and open Problem File Detail modal via Enter.
+	for i := 0; i < len(h.m.dash.filteredProblems) && h.m.dash.filteredProblems[h.m.dash.probCursor].ID != "prob-hr-fail"; i++ {
+		h.press("down")
+	}
+	if h.m.dash.filteredProblems[h.m.dash.probCursor].ID != "prob-hr-fail" {
+		t.Fatalf("failed to select prob-hr-fail")
+	}
+	h.press("enter")
+	if h.m.dash.probDetail == nil {
+		t.Fatal("expected problem detail modal to open on Enter")
+	}
+	modalView := h.view()
+	for _, needle := range []string{"Problem File Detail", "hr/payroll.xlsx", "20.0 KiB"} {
+		if !strings.Contains(modalView, needle) {
+			t.Fatalf("expected %q on first page of problem detail modal:\n%s", needle, modalView)
+		}
+	}
+	wantDiskPath := filepath.Join(hrDir, "payroll.xlsx")
+	// Page down inside the narrow modal to read metadata, wrapped full error, and remediation hint.
+	h.press("pgdown")
+	page2 := h.view()
+	for _, needle := range []string{"sheet=Q1", "4192831", "max_text_mb"} {
+		if !strings.Contains(page2, needle) {
+			t.Fatalf("expected %q on scrolled page 2 of problem detail modal:\n%s", needle, page2)
+		}
+	}
+	// Resize wider so disk path fits unwrapped cleanly too.
+	h.send(tea.WindowSizeMsg{Width: 120, Height: 36}, false)
+	if wideView := h.view(); !strings.Contains(wideView, wantDiskPath) {
+		t.Fatalf("expected unwrapped disk path %q at 120 cols:\n%s", wantDiskPath, wideView)
+	}
+	h.press("pgup", "esc")
+	if h.m.dash.probDetail != nil {
+		t.Fatal("expected Esc to close problem detail modal")
+	}
+
+	// Re-open modal and trigger single-collection re-index ('c') on "hr" end-to-end.
+	h.press("enter")
+	h.submit("c")
+	if h.m.dash.indexing || h.m.dash.probDetail != nil {
+		t.Fatalf("expected 'c' index pass to finish and modal closed (indexing=%v)", h.m.dash.indexing)
+	}
+	if len(indexedRuns) != 1 || len(indexedRuns[0]) != 1 || indexedRuns[0][0] != "hr" {
+		t.Fatalf("collection-scoped re-index ran %v, want [[hr]]", indexedRuns)
+	}
+}
+
+func TestAuditDetailDocResolutionFiltersAndLiveFollow(t *testing.T) {
+	base := t.TempDir()
+	cfgPath := filepath.Join(base, "roost.toml")
+	dataDir := filepath.Join(base, "state")
+	legalDir := filepath.Join(base, "legal")
+	if err := os.MkdirAll(legalDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Default()
+	cfg.Storage.DataDir = dataDir
+	cfg.Collections = []config.Collection{{Name: "legal", Path: legalDir}}
+	if err := config.Save(cfgPath, &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := store.Open(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceDocument(t.Context(), store.Document{
+		ID: "doc-ok", Collection: "legal", RelPath: "handbook.pdf", FileType: "pdf",
+		Status: store.StatusOK,
+	}, []store.Chunk{{Section: "1", Text: "policy"}}); err != nil {
+		t.Fatal(err)
+	}
+	_, tok, err := auth.Create(t.Context(), st, "auditor", []string{auth.AllCollections}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	longQuery := "confidential merger indemnity schedule clause seventeen appendix"
+	if err := st.InsertAudit(t.Context(), store.AuditEntry{
+		Time: time.Now().Add(-2 * time.Minute), TokenID: tok.ID, TokenName: "auditor",
+		Transport: "mcp-http", Remote: "10.0.0.5", Op: "search",
+		Query: longQuery, DocIDs: []string{"doc-ok", "doc-gone"}, Outcome: "ok",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.InsertAudit(t.Context(), store.AuditEntry{
+		Time: time.Now().Add(-1 * time.Minute), TokenID: tok.ID, TokenName: "auditor",
+		Transport: "rest", Remote: "10.0.0.6", Op: "get_document_info",
+		DocIDs: []string{"doc-gone"}, Outcome: "not_found",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+
+	h := newTestHarness(t, Options{ConfigPath: cfgPath})
+	h.press("4") // Tab 4 Audit
+
+	// Outcome filter ('o'): all -> ok -> non-ok -> all.
+	h.press("o") // ok
+	v := h.view()
+	if !strings.Contains(v, "outcome: ok") || !strings.Contains(v, "search") || strings.Contains(v, "not_found") {
+		t.Fatalf("expected outcome=ok filter:\n%s", v)
+	}
+	h.press("o") // non-ok
+	v = h.view()
+	if !strings.Contains(v, "outcome: non-ok") || !strings.Contains(v, "not_found") || strings.Contains(v, "mcp-http") {
+		t.Fatalf("expected outcome=non-ok filter:\n%s", v)
+	}
+	h.press("esc")
+
+	// '/' filter matches by DocID too.
+	h.press("/")
+	h.typeText("doc-ok")
+	v = h.view()
+	if !strings.Contains(v, "mcp-http") || strings.Contains(v, "get_document_info") {
+		t.Fatalf("expected DocID filter to isolate search row:\n%s", v)
+	}
+	// Open detail modal while filtered (first close filter input with Enter).
+	h.press("enter", "enter")
+	if h.m.dash.auditDetail == nil {
+		t.Fatal("expected Enter to open audit detail modal")
+	}
+	modalView := h.view()
+	for _, needle := range []string{"Audit Entry Detail", longQuery, "legal/handbook.pdf", "doc-gone"} {
+		if !strings.Contains(modalView, needle) {
+			t.Fatalf("expected %q in audit detail modal:\n%s", needle, modalView)
+		}
+	}
+	h.press("esc", "esc") // close modal, clear text filter
+
+	// Toggle Follow mode ('f') on Audit tab.
+	h.press("f")
+	if !h.m.dash.auditFollow || !strings.Contains(h.view(), "FOLLOWING live") {
+		t.Fatalf("expected follow mode active:\n%s", h.view())
+	}
+	seq := h.m.dash.auditTickSeq
+
+	// Insert a live audit entry into SQLite and deliver auditTickMsg.
+	if err := h.m.st.InsertAudit(t.Context(), store.AuditEntry{
+		Time: time.Now(), TokenID: tok.ID, TokenName: "auditor",
+		Transport: "mcp-stdio", Op: "search", Query: "live incoming query", Outcome: "ok",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, cmd := h.m.dash.Update(auditTickMsg{seq: seq})
+	if cmd == nil {
+		t.Fatal("expected active auditTickMsg to reschedule next tick")
+	}
+	// Check directly via harness so h.m stays updated cleanly:
+	h.send(auditTickMsg{seq: seq}, false)
+	if !strings.Contains(h.view(), "live incoming query") {
+		t.Fatalf("expected live follow tick to display newly inserted audit entry:\n%s", h.view())
+	}
+
+	// Scroll cursor down onto older "get_document_info" row and verify live ticks preserve selection.
+	h.press("down")
+	selectedOp := h.m.dash.filteredAudit[h.m.dash.auditCursor].Op
+	if selectedOp != "get_document_info" {
+		t.Fatalf("selectedOp = %q, want get_document_info", selectedOp)
+	}
+	if err := h.m.st.InsertAudit(t.Context(), store.AuditEntry{
+		Time: time.Now().Add(time.Second), TokenID: tok.ID, TokenName: "auditor",
+		Transport: "rest", Op: "list_documents", Outcome: "ok",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h.send(auditTickMsg{seq: h.m.dash.auditTickSeq}, false)
+	if gotOp := h.m.dash.filteredAudit[h.m.dash.auditCursor].Op; gotOp != "get_document_info" {
+		t.Fatalf("cursor jumped after live refresh to %q, want get_document_info", gotOp)
+	}
+
+	// Switching away invalidates tick chain; switching back re-arms follow.
+	h.press("1")
+	_, offTabCmd := h.m.dash.Update(auditTickMsg{seq: seq})
+	if offTabCmd != nil {
+		t.Fatal("expected audit tick on another tab not to reschedule")
+	}
+	_, retCmd := h.m.Update(keyPress("4"))
+	if retCmd == nil {
+		t.Fatal("expected switching back to Audit tab while follow is enabled to re-arm tick cmd")
+	}
+	h.press("4") // ensure harness pointer is on Audit tab
+	h.press("f") // turn follow off
+	if h.m.dash.auditFollow {
+		t.Fatal("expected second 'f' press to pause follow mode")
+	}
+	if cmd != nil && !h.m.dash.auditFollow {
+		_, pausedCmd := h.m.dash.Update(auditTickMsg{seq: seq})
+		if pausedCmd != nil {
+			t.Fatal("expected stale auditTickMsg after pausing follow not to reschedule")
+		}
+	}
+}
+
+func TestExploreSearchAclReaderAndAuditTrail(t *testing.T) {
+	base := t.TempDir()
+	cfgPath := filepath.Join(base, "roost.toml")
+	dataDir := filepath.Join(base, "state")
+	legalDir := filepath.Join(base, "legal")
+	hrDir := filepath.Join(base, "hr")
+	for _, d := range []string{legalDir, hrDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cfg := config.Default()
+	cfg.Storage.DataDir = dataDir
+	cfg.Collections = []config.Collection{
+		{Name: "legal", Path: legalDir},
+		{Name: "hr", Path: hrDir},
+	}
+	if err := config.Save(cfgPath, &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := store.Open(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceDocument(t.Context(), store.Document{
+		ID: "doc-legal", Collection: "legal", RelPath: "msa.pdf", Title: "Master Services Agreement",
+		FileType: "pdf", Size: 4096, MTimeNS: time.Now().UnixNano(), Status: store.StatusOK,
+	}, []store.Chunk{
+		{Section: "Page 1", Text: "General agreement recitals and party definitions."},
+		{Section: "Page 2", Text: "The supplier indemnity cap liability clause applies cleanly here."},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceDocument(t.Context(), store.Document{
+		ID: "doc-hr", Collection: "hr", RelPath: "salaries.xlsx", Title: "Compensation Plan",
+		FileType: "xlsx", Size: 8192, MTimeNS: time.Now().UnixNano(), Status: store.StatusOK,
+	}, []store.Chunk{
+		{Section: "Sheet 1", Text: "Executive indemnity cap schedule for 2026."},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceDocument(t.Context(), store.Document{
+		ID: "doc-notext", Collection: "legal", RelPath: "scan.pdf", Title: "scan.pdf",
+		FileType: "pdf", Size: 2048, MTimeNS: time.Now().UnixNano(), Status: store.StatusNoText,
+		Error: "scanned image only",
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := auth.Create(t.Context(), st, "legal-bot", []string{"legal"}, 0); err != nil {
+		t.Fatal(err)
+	}
+	_, revokedTok, err := auth.Create(t.Context(), st, "revoked-bot", []string{auth.AllCollections}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RevokeToken(t.Context(), revokedTok.ID); err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+
+	h := newTestHarness(t, Options{ConfigPath: cfgPath, InitialTab: "explore"})
+	if h.m.dash.tab != tabExplore {
+		t.Fatalf("tab = %v, want tabExplore", h.m.dash.tab)
+	}
+	v := h.view()
+	for _, needle := range []string{"msa.pdf", "salaries.xlsx", "scan.pdf"} {
+		if !strings.Contains(v, needle) {
+			t.Fatalf("expected browse view to include %q:\n%s", needle, v)
+		}
+	}
+
+	// Search with '/' -> "indemnity cap" + Enter.
+	h.press("/")
+	h.typeText("indemnity cap")
+	h.press("enter")
+	v = h.view()
+	for _, needle := range []string{"mode: all_terms", "msa.pdf", "salaries.xlsx", "Hit Preview"} {
+		if !strings.Contains(v, needle) {
+			t.Fatalf("expected search view to include %q:\n%s", needle, v)
+		}
+	}
+	if strings.Contains(v, "**indemnity**") {
+		t.Fatalf("expected FTS ** markers to be stripped/styled cleanly:\n%s", v)
+	}
+
+	// Select legal/msa.pdf hit and press Enter to open Document Reader on matching Page 2.
+	for i := 0; i < len(h.m.dash.expl.hits) && h.m.dash.expl.hits[h.m.dash.expl.cursor].DocID != "doc-legal"; i++ {
+		h.press("down")
+	}
+	if h.m.dash.expl.hits[h.m.dash.expl.cursor].DocID != "doc-legal" {
+		t.Fatal("failed to locate doc-legal hit")
+	}
+	h.press("enter")
+	if h.m.dash.expl.docReader == nil {
+		t.Fatal("expected Enter on hit to open Document Reader")
+	}
+	rv := h.view()
+	if !strings.Contains(rv, "[2/2] Page 2") || !strings.Contains(rv, "indemnity cap liability clause") {
+		t.Fatalf("expected reader to jump straight to Page 2:\n%s", rv)
+	}
+	// Step backward in Outline sections ('left') to Page 1.
+	h.press("left")
+	rv = h.view()
+	if !strings.Contains(rv, "[1/2] Page 1") || !strings.Contains(rv, "General agreement recitals") {
+		t.Fatalf("expected left key in reader to switch to Page 1:\n%s", rv)
+	}
+	h.press("esc")
+
+	// Browse back ('b'), open Reader on no_text document, confirm clear message.
+	h.press("b")
+	for i := 0; i < len(h.m.dash.expl.docs) && h.m.dash.expl.docs[h.m.dash.expl.cursor].DocID != "doc-notext"; i++ {
+		h.press("down")
+	}
+	h.press("enter")
+	if !strings.Contains(h.view(), "No extracted text stored") || !strings.Contains(h.view(), "scanned image only") {
+		t.Fatalf("expected clear empty-text explanation on no_text doc:\n%s", h.view())
+	}
+	h.press("esc")
+
+	// Search again, then cycle token ACL preview ('t') -> legal-bot must hide hr/salaries.xlsx!
+	h.press("/")
+	h.typeText("indemnity")
+	h.press("enter", "t")
+	v = h.view()
+	if !strings.Contains(v, "token: legal-bot -> [legal]") || !strings.Contains(v, "msa.pdf") || strings.Contains(v, "salaries.xlsx") {
+		t.Fatalf("expected legal-bot ACL preview to keep msa.pdf and hide salaries.xlsx:\n%s", v)
+	}
+	if strings.Contains(v, "revoked-bot") {
+		t.Fatalf("revoked token should never appear in preview cycle:\n%s", v)
+	}
+
+	// Switch to Tab 4 Audit -> tui-explore events must appear in live SQLite audit log!
+	h.press("4")
+	av := h.view()
+	if !strings.Contains(av, "tui-expl") || !strings.Contains(av, "legal-bot") || !strings.Contains(av, "indemnity") {
+		t.Fatalf("expected tui-explore audit rows on Audit tab:\n%s", av)
+	}
+}
+
+func TestExploreVectorFallbackPaginationRequireConfigAndWizardShortcut(t *testing.T) {
+	base := t.TempDir()
+	missingCfg := filepath.Join(base, "missing.toml")
+	if _, err := newAppModel(t.Context(), Options{ConfigPath: missingCfg, RequireConfig: true}); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("expected clear not-found error with RequireConfig=true, got %v", err)
+	}
+
+	cfgPath := filepath.Join(base, "roost.toml")
+	dataDir := filepath.Join(base, "state")
+	docsDir := filepath.Join(base, "docs")
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Default()
+	cfg.Storage.DataDir = dataDir
+	cfg.Collections = []config.Collection{{Name: "docs", Path: docsDir}}
+	cfg.Embeddings.Enabled = true
+	cfg.Embeddings.Endpoint = "http://127.0.0.1:11434/v1/embeddings"
+	cfg.Embeddings.Model = "nomic-embed-text"
+	if err := config.Save(cfgPath, &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := store.Open(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Seed 25 docs for browse pagination + 1 long doc spanning >16k chars for reader window pagination.
+	for i := range 25 {
+		if err := st.ReplaceDocument(t.Context(), store.Document{
+			ID: fmt.Sprintf("d-%02d", i), Collection: "docs", RelPath: fmt.Sprintf("file-%02d.txt", i),
+			FileType: "txt", Size: 100, MTimeNS: time.Now().UnixNano(), Status: store.StatusOK,
+		}, []store.Chunk{{Section: "Body", Text: fmt.Sprintf("document %02d keyword alpha", i)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	longPart1 := strings.Repeat("alpha pageone ", 1300) // ~18,200 chars > exploreReadWindow
+	if err := st.ReplaceDocument(t.Context(), store.Document{
+		ID: "d-long", Collection: "docs", RelPath: "z-long.txt",
+		FileType: "txt", Size: 20000, MTimeNS: time.Now().UnixNano(), Status: store.StatusOK,
+	}, []store.Chunk{{Section: "Body", Text: longPart1 + "TAILMARKER"}}); err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+
+	// VectorFunc fails -> Explore falls back to keyword search and surfaces warning banner.
+	h := newTestHarness(t, Options{
+		ConfigPath: cfgPath,
+		InitialTab: "explore",
+		NewVectors: func(_ *config.Config, _ *store.Store) (core.VectorSearcher, error) {
+			return nil, errors.New("embeddings: OPENAI_API_KEY is not set")
+		},
+	})
+	v := h.view()
+	if !strings.Contains(v, "OPENAI_API_KEY is not set") || !strings.Contains(v, "file-00.txt") {
+		t.Fatalf("expected vector fallback warning + page 1 docs:\n%s", v)
+	}
+
+	// Next page ']' shows later files ("file-20.txt" / "z-long.txt"), '[' returns to page 1.
+	h.press("]")
+	if !strings.Contains(h.view(), "z-long.txt") {
+		t.Fatalf("expected page 2 to show z-long.txt:\n%s", h.view())
+	}
+	for i := 0; i < len(h.m.dash.expl.docs) && h.m.dash.expl.docs[h.m.dash.expl.cursor].DocID != "d-long"; i++ {
+		h.press("down")
+	}
+	h.press("enter")
+	if h.m.dash.expl.docReader == nil || h.m.dash.expl.docReader.resp.NextOffset == 0 {
+		t.Fatalf("expected reader NextOffset > 0 on long document")
+	}
+	if strings.Contains(h.view(), "TAILMARKER") {
+		t.Fatal("TAILMARKER should not fit in first 16k reader window")
+	}
+	h.press("n", "pgdown") // advance to next 16k window and scroll to bottom
+	if !strings.Contains(h.view(), "TAILMARKER") {
+		t.Fatalf("expected TAILMARKER on second reader window:\n%s", h.view())
+	}
+	h.press("p") // step back to offset 0
+	if h.m.dash.expl.docReader.offset != 0 {
+		t.Fatalf("offset after 'p' = %d, want 0", h.m.dash.expl.docReader.offset)
+	}
+	h.press("esc", "[")
+	if !strings.Contains(h.view(), "file-00.txt") {
+		t.Fatalf("expected '[' to return to page 1:\n%s", h.view())
+	}
+
+	// Verify wizard Finish 'e' shortcut opens Explore tab directly.
+	wizBase := t.TempDir()
+	wizCfg := filepath.Join(wizBase, "roost.toml")
+	wizData := filepath.Join(wizBase, "data")
+	wizDocs := filepath.Join(wizBase, "docs")
+	if err := os.MkdirAll(wizDocs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wh := newTestHarness(t, Options{ConfigPath: wizCfg})
+	wh.press("enter")
+	wh.clearAndType(wizData)
+	wh.press("enter", "a")
+	wh.clearAndType(wizDocs)
+	wh.submit("ctrl+s")
+	wh.press("n", "enter", "down", "enter") // server -> embeddings -> review
+	wh.submit("enter")                      // save config & advance to finish
+	if wh.m.wizard.step != wizFinish {
+		t.Fatalf("wizard step = %v, want wizFinish (err=%q)", wh.m.wizard.step, wh.m.wizard.errMsg)
+	}
+	wh.submit("e") // shortcut to Explore tab
+	if wh.m.inWizard || wh.m.dash.tab != tabExplore {
+		t.Fatalf("expected 'e' on wizard Finish to jump to tabExplore (inWizard=%v tab=%v)", wh.m.inWizard, wh.m.dash.tab)
 	}
 }

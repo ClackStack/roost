@@ -13,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/ClackStack/roost/internal/config"
+	"github.com/ClackStack/roost/internal/store"
 )
 
 type styles struct {
@@ -247,4 +248,84 @@ func clientSnippets(cfg *config.Config, cfgPath, secret string) string {
 	fmt.Fprintf(&b, "   # Or stdio: command = \"roost\", args = [\"mcp\", \"--config\", %q]\n\n", absCfg)
 	fmt.Fprintf(&b, "4) Test over HTTP:\n   curl -H \"Authorization: Bearer $ROOST_TOKEN\" \"%s/v1/collections\"", url)
 	return b.String()
+}
+
+func formatBytes(n int64) string {
+	if n < 0 {
+		return "unknown"
+	}
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	units := []string{"KiB", "MiB", "GiB", "TiB"}
+	val := float64(n)
+	for _, u := range units {
+		val /= 1024
+		if val < 1024 || u == units[len(units)-1] {
+			return fmt.Sprintf("%.1f %s (%d bytes)", val, u, n)
+		}
+	}
+	return fmt.Sprintf("%d bytes", n)
+}
+
+// wrapLines wraps multi-line text to width runes, breaking long unbroken tokens
+// like paths or SHA-256 hashes cleanly so modals never overflow narrow panes.
+func wrapLines(text string, width int) []string {
+	if width <= 0 {
+		return strings.Split(text, "\n")
+	}
+	var out []string
+	for para := range strings.SplitSeq(text, "\n") {
+		if para == "" {
+			out = append(out, "")
+			continue
+		}
+		r := []rune(para)
+		for len(r) > 0 {
+			if len(r) <= width {
+				out = append(out, string(r))
+				break
+			}
+			cut := width
+			if width > 12 {
+				for i := width; i > width/3; i-- {
+					if r[i-1] == ' ' {
+						cut = i - 1
+						break
+					}
+				}
+			}
+			line := strings.TrimRight(string(r[:cut]), " ")
+			out = append(out, line)
+			rest := r[cut:]
+			for len(rest) > 0 && rest[0] == ' ' {
+				rest = rest[1:]
+			}
+			r = rest
+		}
+	}
+	return out
+}
+
+func problemGuidance(d store.Document) string {
+	var parts []string
+	switch d.Status {
+	case store.StatusNoText:
+		parts = append(parts, "File parsed with no extractable text (commonly a scanned PDF without embedded OCR).")
+	case store.StatusEncrypted:
+		parts = append(parts, "Remove password protection from the source document and re-index.")
+	case store.StatusTooLarge:
+		parts = append(parts, "File exceeds index.max_file_mb; raise index.max_file_mb in Settings (Tab 5) and re-index if needed.")
+	case store.StatusUnsupported:
+		parts = append(parts, "Unsupported file format; add an [collections] exclude glob if it should be ignored.")
+	case store.StatusFailed:
+		parts = append(parts, "Check file integrity and OS read permissions, then re-index.")
+	}
+	if d.Truncated {
+		parts = append(parts, "Extracted text exceeded index.max_text_mb and was truncated; raise index.max_text_mb in Settings (Tab 5) if full content is needed.")
+	}
+	if len(parts) == 0 {
+		return "Fix the file or collection settings, then press 'c' to re-index this collection."
+	}
+	return strings.Join(parts, " ")
 }

@@ -42,6 +42,7 @@ Usage: roost <command> [flags]
 Commands:
   init                   Write a starter roost.toml
   setup [--wizard]       Interactive TUI wizard and configurator
+  explore                Interactive TUI to search and inspect indexed docs
   serve                  Index documents and serve MCP and REST over HTTP
   mcp                    Serve MCP over stdio (needs ROOST_TOKEN)
   index [--prune]        Run one indexing pass, then exit
@@ -80,6 +81,8 @@ func run(args []string) error {
 		return cmdInit(rest)
 	case "setup":
 		return cmdSetup(ctx, rest)
+	case "explore":
+		return cmdExplore(ctx, rest)
 	case "serve":
 		return cmdServe(ctx, rest)
 	case "mcp":
@@ -185,7 +188,28 @@ func cmdSetup(ctx context.Context, args []string) error {
 		ConfigPath:  config.Find(*cfgPath),
 		ForceWizard: *wizard,
 		Index:       indexWithConfig,
+		NewVectors:  vectorsWithConfig,
 	})
+}
+
+func cmdExplore(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("explore", flag.ExitOnError)
+	cfgPath := fs.String("config", "", "config file")
+	fs.Parse(args)
+	return tui.Run(ctx, tui.Options{
+		ConfigPath:    config.Find(*cfgPath),
+		RequireConfig: true,
+		InitialTab:    "explore",
+		Index:         indexWithConfig,
+		NewVectors:    vectorsWithConfig,
+	})
+}
+
+func vectorsWithConfig(cfg *config.Config, st *store.Store) (core.VectorSearcher, error) {
+	if !cfg.Embeddings.Enabled {
+		return nil, nil
+	}
+	return embed.New(cfg.Embeddings, st, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func indexWithConfig(ctx context.Context, cfg *config.Config, st *store.Store) (map[string]indexer.Stats, error) {

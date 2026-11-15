@@ -16,11 +16,14 @@ import (
 
 // Options configures an interactive setup/configurator session.
 type Options struct {
-	ConfigPath  string
-	ForceWizard bool
-	Index       IndexFunc
-	In          io.Reader
-	Out         io.Writer
+	ConfigPath    string
+	ForceWizard   bool
+	RequireConfig bool
+	InitialTab    string
+	Index         IndexFunc
+	NewVectors    VectorFunc
+	In            io.Reader
+	Out           io.Writer
 }
 
 type fdReader interface {
@@ -81,6 +84,7 @@ type appModel struct {
 	ctx      context.Context
 	cfgPath  string
 	indexFn  IndexFunc
+	vecFn    VectorFunc
 	styles   styles
 	width    int
 	height   int
@@ -88,6 +92,23 @@ type appModel struct {
 	wizard   wizardModel
 	dash     dashboardModel
 	st       *store.Store
+}
+
+func parseInitialTab(name string) dashTab {
+	switch name {
+	case "tokens":
+		return tabTokens
+	case "status":
+		return tabStatus
+	case "audit":
+		return tabAudit
+	case "settings":
+		return tabSettings
+	case "explore":
+		return tabExplore
+	default:
+		return tabCollections
+	}
 }
 
 func newAppModel(ctx context.Context, opts Options) (*appModel, error) {
@@ -104,6 +125,9 @@ func newAppModel(ctx context.Context, opts Options) (*appModel, error) {
 	if statErr != nil && !os.IsNotExist(statErr) {
 		return nil, fmt.Errorf("stat %s: %w", cfgPath, statErr)
 	}
+	if !cfgExists && opts.RequireConfig && !opts.ForceWizard {
+		return nil, fmt.Errorf("config file %s not found (run `roost setup` or `roost init` first)", cfgPath)
+	}
 
 	var loadedCfg *config.Config
 	if cfgExists {
@@ -118,6 +142,7 @@ func newAppModel(ctx context.Context, opts Options) (*appModel, error) {
 		ctx:     ctx,
 		cfgPath: cfgPath,
 		indexFn: opts.Index,
+		vecFn:   opts.NewVectors,
 		styles:  st,
 		width:   width,
 		height:  height,
@@ -135,7 +160,10 @@ func newAppModel(ctx context.Context, opts Options) (*appModel, error) {
 	}
 	m.st = opened
 	m.inWizard = false
-	m.dash = newDashboardModel(ctx, cfgPath, loadedCfg, opened, opts.Index, st, width, height)
+	m.dash = newDashboardModel(ctx, cfgPath, loadedCfg, opened, opts.Index, opts.NewVectors, st, width, height)
+	if initTab := parseInitialTab(opts.InitialTab); initTab != tabCollections {
+		m.dash, _ = m.dash.switchTab(initTab)
+	}
 	return m, nil
 }
 
@@ -179,7 +207,10 @@ func (m *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchToDashboardMsg:
 		m.st = msg.st
 		m.inWizard = false
-		m.dash = newDashboardModel(m.ctx, m.cfgPath, msg.cfg, msg.st, m.indexFn, m.styles, m.width, m.height)
+		m.dash = newDashboardModel(m.ctx, m.cfgPath, msg.cfg, msg.st, m.indexFn, m.vecFn, m.styles, m.width, m.height)
+		if msg.tab != tabCollections {
+			m.dash, _ = m.dash.switchTab(msg.tab)
+		}
 		return m, nil
 	case storeReopenedMsg:
 		m.st = msg.st

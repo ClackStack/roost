@@ -10,6 +10,7 @@
 		<a href="#search">search</a>
 		<a href="#mcp">MCP</a>
 		<a href="#compare">compare</a>
+		<a href="#setup">setup</a>
 		<a href="#get" class="get">download</a>
 	</nav>
 </header>

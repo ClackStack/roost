@@ -3,7 +3,9 @@ package tui
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +27,7 @@ const (
 	tabStatus
 	tabAudit
 	tabSettings
+	tabExplore
 )
 
 var dashTabNames = []string{
@@ -33,6 +36,7 @@ var dashTabNames = []string{
 	"3 Status",
 	"4 Audit",
 	"5 Settings",
+	"6 Explore",
 }
 
 type storeReopenedMsg struct {
@@ -244,12 +248,56 @@ func allSettings() []settingSpec {
 	}
 }
 
+const auditPollInterval = 1500 * time.Millisecond
+
+type auditTickMsg struct {
+	seq int
+}
+
+var probStatusFilters = []string{
+	"",
+	store.StatusFailed,
+	store.StatusEncrypted,
+	store.StatusNoText,
+	store.StatusTooLarge,
+	store.StatusUnsupported,
+	"truncated",
+}
+
+func probFilterLabel(code string) string {
+	if code == "" {
+		return "all"
+	}
+	return code
+}
+
+var auditOutcomeFilters = []string{"", "ok", "non-ok"}
+
+func auditOutcomeLabel(code string) string {
+	if code == "" {
+		return "all"
+	}
+	return code
+}
+
+func auditTickCmd(seq int) tea.Cmd {
+	return tea.Tick(auditPollInterval, func(time.Time) tea.Msg {
+		return auditTickMsg{seq: seq}
+	})
+}
+
+func auditEntrySig(e store.AuditEntry) string {
+	return fmt.Sprintf("%d\x00%s\x00%s\x00%s\x00%s\x00%s",
+		e.Time.UnixNano(), e.TokenID, e.Op, e.Outcome, e.Query, strings.Join(e.DocIDs, ","))
+}
+
 type dashboardModel struct {
 	ctx     context.Context
 	cfgPath string
 	cfg     *config.Config
 	store   *store.Store
 	indexFn IndexFunc
+	vecFn   VectorFunc
 	styles  styles
 	width   int
 	height  int
@@ -283,18 +331,30 @@ type dashboardModel struct {
 	revokeConf bool
 
 	// Status tab state
-	probCursor  int
-	probScroll  int
-	indexing    bool
-	spin        spinner.Model
-	indexReport string
+	probCursor       int
+	probScroll       int
+	probFilterIdx    int
+	probSearchOn     bool
+	probSearchIn     textinput.Model
+	filteredProblems []store.Document
+	probDetail       *store.Document
+	probDetailScroll int
+	indexing         bool
+	spin             spinner.Model
+	indexReport      string
 
 	// Audit tab state
-	auditCursor    int
-	auditScroll    int
-	auditFilterOn  bool
-	auditFilterIn  textinput.Model
-	filteredAudit  []store.AuditEntry
+	auditCursor           int
+	auditScroll           int
+	auditFilterOn         bool
+	auditFilterIn         textinput.Model
+	auditOutcomeFilterIdx int
+	filteredAudit         []store.AuditEntry
+	auditFollow           bool
+	auditTickSeq          int
+	auditDetail           *store.AuditEntry
+	auditDetailDocs       []string
+	auditDetailScroll     int
 
 	// Settings tab state
 	settingsSpecs []settingSpec
@@ -307,9 +367,12 @@ type dashboardModel struct {
 	setPicker     *folderPickerModel
 	tomlPreview   []string
 	tomlScroll    int
+
+	// Explore tab state
+	expl exploreModel
 }
 
-func newDashboardModel(ctx context.Context, cfgPath string, cfg *config.Config, st *store.Store, indexFn IndexFunc, stStyles styles, width, height int) dashboardModel {
+func newDashboardModel(ctx context.Context, cfgPath string, cfg *config.Config, st *store.Store, indexFn IndexFunc, vecFn VectorFunc, stStyles styles, width, height int) dashboardModel {
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	m := dashboardModel{
 		ctx:           ctx,
@@ -317,14 +380,17 @@ func newDashboardModel(ctx context.Context, cfgPath string, cfg *config.Config, 
 		cfg:           cfg.Clone(),
 		store:         st,
 		indexFn:       indexFn,
+		vecFn:         vecFn,
 		styles:        stStyles,
 		width:         width,
 		height:        height,
 		spin:          sp,
-		auditFilterIn: newTextInput("filter token, op, outcome, or query...", "", max(24, width-20), stStyles.isDark),
+		probSearchIn:  newTextInput("filter collection, path, status, or error...", "", max(24, width-20), stStyles.isDark),
+		auditFilterIn: newTextInput("filter token, op, outcome, doc ID, or query...", "", max(24, width-20), stStyles.isDark),
 		settingsSpecs: allSettings(),
 		draftCfg:      cfg.Clone(),
 		setInput:      newTextInput("", "", max(24, width-20), stStyles.isDark),
+		expl:          newExploreModel(ctx, cfg, st, vecFn, stStyles, width, height),
 	}
 	m.refreshAll()
 	return m
@@ -334,10 +400,14 @@ func (m *dashboardModel) setSize(width, height int, st styles) {
 	m.width = width
 	m.height = height
 	m.styles = st
-	m.auditFilterIn.SetWidth(max(24, width-20))
+	iw := max(24, width-20)
+	m.probSearchIn.SetWidth(iw)
+	m.probSearchIn.SetStyles(textinput.DefaultStyles(st.isDark))
+	m.auditFilterIn.SetWidth(iw)
 	m.auditFilterIn.SetStyles(textinput.DefaultStyles(st.isDark))
-	m.setInput.SetWidth(max(24, width-20))
+	m.setInput.SetWidth(iw)
 	m.setInput.SetStyles(textinput.DefaultStyles(st.isDark))
+	m.expl.setSize(width, height, st)
 	if m.colEd != nil {
 		m.colEd.setSize(width, height, st)
 	}
@@ -353,6 +423,7 @@ func (m *dashboardModel) refreshAll() {
 	m.refreshStatus()
 	m.refreshTokens()
 	m.refreshAudit()
+	m.expl.sync(m.cfg, m.store, m.tab == tabExplore)
 }
 
 func (m *dashboardModel) refreshStatus() {
@@ -375,11 +446,9 @@ func (m *dashboardModel) refreshStatus() {
 	if orphans, err := m.store.OrphanCollections(m.ctx, m.cfg.CollectionNames()); err == nil {
 		m.orphans = orphans
 	}
-	if probs, err := m.store.Problems(m.ctx, 200); err == nil {
+	if probs, err := m.store.Problems(m.ctx, 500); err == nil {
 		m.problems = probs
-		if m.probCursor >= len(m.problems) {
-			m.probCursor = max(0, len(m.problems)-1)
-		}
+		m.applyProblemFilter()
 	}
 	if m.cfg.Embeddings.Enabled {
 		if missing, total, err := m.store.EmbeddingProgress(m.ctx); err == nil {
@@ -388,6 +457,42 @@ func (m *dashboardModel) refreshStatus() {
 	}
 	if len(errs) > 0 {
 		m.flashErr = strings.Join(errs, "; ")
+	}
+}
+
+func (m *dashboardModel) applyProblemFilter() {
+	statusCode := probStatusFilters[m.probFilterIdx]
+	q := strings.ToLower(strings.TrimSpace(m.probSearchIn.Value()))
+	var out []store.Document
+	for _, d := range m.problems {
+		if !matchesProblemStatus(d, statusCode) {
+			continue
+		}
+		if q != "" {
+			hay := strings.ToLower(d.Collection + "/" + d.RelPath + " " + d.Title + " " + d.FileType + " " + d.Status + " " + d.Error + " " + d.ID)
+			if !strings.Contains(hay, q) {
+				continue
+			}
+		}
+		out = append(out, d)
+	}
+	m.filteredProblems = out
+	if m.probCursor >= len(m.filteredProblems) {
+		m.probCursor = max(0, len(m.filteredProblems)-1)
+	}
+	if m.probScroll > m.probCursor {
+		m.probScroll = m.probCursor
+	}
+}
+
+func matchesProblemStatus(d store.Document, code string) bool {
+	switch code {
+	case "":
+		return true
+	case "truncated":
+		return d.Truncated
+	default:
+		return d.Status == code
 	}
 }
 
@@ -410,29 +515,53 @@ func (m *dashboardModel) refreshAudit() {
 	if m.store == nil {
 		return
 	}
-	entries, err := m.store.RecentAudit(m.ctx, 200)
+	var prevSig string
+	if m.auditCursor > 0 && m.auditCursor < len(m.filteredAudit) {
+		prevSig = auditEntrySig(m.filteredAudit[m.auditCursor])
+	}
+	entries, err := m.store.RecentAudit(m.ctx, 500)
 	if err != nil {
 		m.flashErr = "read audit: " + err.Error()
 		return
 	}
 	m.auditEntries = entries
 	m.applyAuditFilter()
+	if prevSig != "" {
+		for i, e := range m.filteredAudit {
+			if auditEntrySig(e) == prevSig {
+				m.auditCursor = i
+				rows := max(5, m.height-17)
+				if m.auditCursor < m.auditScroll {
+					m.auditScroll = m.auditCursor
+				} else if m.auditCursor >= m.auditScroll+rows {
+					m.auditScroll = m.auditCursor - rows + 1
+				}
+				break
+			}
+		}
+	}
 }
 
 func (m *dashboardModel) applyAuditFilter() {
+	outcomeCode := auditOutcomeFilters[m.auditOutcomeFilterIdx]
 	q := strings.ToLower(strings.TrimSpace(m.auditFilterIn.Value()))
-	if q == "" {
-		m.filteredAudit = m.auditEntries
-	} else {
-		var out []store.AuditEntry
-		for _, e := range m.auditEntries {
-			hay := strings.ToLower(e.TokenName + " " + e.Transport + " " + e.Op + " " + e.Outcome + " " + e.Query + " " + e.Remote)
-			if strings.Contains(hay, q) {
-				out = append(out, e)
+	var out []store.AuditEntry
+	for _, e := range m.auditEntries {
+		if outcomeCode == "ok" && e.Outcome != "ok" {
+			continue
+		}
+		if outcomeCode == "non-ok" && e.Outcome == "ok" {
+			continue
+		}
+		if q != "" {
+			hay := strings.ToLower(e.TokenName + " " + e.TokenID + " " + e.Transport + " " + e.Op + " " + e.Outcome + " " + e.Query + " " + e.Remote + " " + strings.Join(e.DocIDs, " "))
+			if !strings.Contains(hay, q) {
+				continue
 			}
 		}
-		m.filteredAudit = out
+		out = append(out, e)
 	}
+	m.filteredAudit = out
 	if m.auditCursor >= len(m.filteredAudit) {
 		m.auditCursor = max(0, len(m.filteredAudit)-1)
 	}
@@ -444,7 +573,33 @@ func (m *dashboardModel) applyAuditFilter() {
 func (m dashboardModel) hasOverlay() bool {
 	return m.colEd != nil || m.rmColConfirm || m.pruneOrphanConf ||
 		m.tokModal != nil || m.revokeConf ||
-		m.auditFilterOn || m.setEditing || m.setPicker != nil || len(m.tomlPreview) > 0
+		m.probSearchOn || m.probDetail != nil ||
+		m.auditFilterOn || m.auditDetail != nil ||
+		m.setEditing || m.setPicker != nil || len(m.tomlPreview) > 0 ||
+		(m.tab == tabExplore && m.expl.hasOverlay())
+}
+
+func (m dashboardModel) switchTab(next dashTab) (dashboardModel, tea.Cmd) {
+	if m.tab == tabAudit && next != tabAudit && m.auditFollow {
+		// Invalidate active polling ticks while off the Audit tab; re-arm on return.
+		m.auditTickSeq++
+	}
+	m.tab = next
+	switch next {
+	case tabTokens:
+		m.refreshTokens()
+	case tabStatus:
+		m.refreshStatus()
+	case tabAudit:
+		m.refreshAudit()
+		if m.auditFollow {
+			m.auditTickSeq++
+			return m, auditTickCmd(m.auditTickSeq)
+		}
+	case tabExplore:
+		m.expl.sync(m.cfg, m.store, true)
+	}
+	return m, nil
 }
 
 func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
@@ -456,6 +611,12 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	case auditTickMsg:
+		if !m.auditFollow || m.tab != tabAudit || msg.seq != m.auditTickSeq {
+			return m, nil
+		}
+		m.refreshAudit()
+		return m, auditTickCmd(m.auditTickSeq)
 	case indexDoneMsg:
 		m.indexing = false
 		m.indexReport = formatIndexSummary(msg.stats, msg.err)
@@ -481,6 +642,12 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	if len(m.tomlPreview) > 0 {
 		return m.updateTOMLPreview(msg)
 	}
+	if m.probDetail != nil {
+		return m.updateProblemDetail(msg)
+	}
+	if m.auditDetail != nil {
+		return m.updateAuditDetail(msg)
+	}
 	if m.rmColConfirm {
 		return m.updateRemoveColConfirm(msg)
 	}
@@ -490,11 +657,19 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	if m.revokeConf {
 		return m.updateRevokeConfirm(msg)
 	}
+	if m.probSearchOn {
+		return m.updateProbSearch(msg)
+	}
 	if m.auditFilterOn {
 		return m.updateAuditFilter(msg)
 	}
 	if m.setEditing {
 		return m.updateSettingEdit(msg)
+	}
+	if m.tab == tabExplore && m.expl.hasOverlay() {
+		var cmd tea.Cmd
+		m.expl, cmd = m.expl.Update(msg)
+		return m, cmd
 	}
 
 	key, ok := msg.(tea.KeyPressMsg)
@@ -506,29 +681,21 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "1":
-		m.tab = tabCollections
-		return m, nil
+		return m.switchTab(tabCollections)
 	case "2":
-		m.tab = tabTokens
-		m.refreshTokens()
-		return m, nil
+		return m.switchTab(tabTokens)
 	case "3":
-		m.tab = tabStatus
-		m.refreshStatus()
-		return m, nil
+		return m.switchTab(tabStatus)
 	case "4":
-		m.tab = tabAudit
-		m.refreshAudit()
-		return m, nil
+		return m.switchTab(tabAudit)
 	case "5":
-		m.tab = tabSettings
-		return m, nil
+		return m.switchTab(tabSettings)
+	case "6":
+		return m.switchTab(tabExplore)
 	case "tab", "right":
-		m.tab = (m.tab + 1) % 5
-		return m, nil
+		return m.switchTab((m.tab + 1) % 6)
 	case "shift+tab", "left":
-		m.tab = (m.tab + 4) % 5
-		return m, nil
+		return m.switchTab((m.tab + 5) % 6)
 	}
 
 	switch m.tab {
@@ -542,6 +709,10 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		return m.updateAuditTab(key)
 	case tabSettings:
 		return m.updateSettingsTab(key)
+	case tabExplore:
+		var cmd tea.Cmd
+		m.expl, cmd = m.expl.Update(key)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -825,41 +996,157 @@ func (m dashboardModel) updateTokensTab(key tea.KeyPressMsg) (dashboardModel, te
 	return m, nil
 }
 
-func (m dashboardModel) updateStatusTab(key tea.KeyPressMsg) (dashboardModel, tea.Cmd) {
-	rows := max(4, m.height-18)
-	switch key.String() {
+func moveListCursor(cursor, scroll *int, total, rows int, key string) bool {
+	if total <= 0 {
+		*cursor, *scroll = 0, 0
+		return key == "up" || key == "k" || key == "down" || key == "j" || key == "pgup" || key == "pgdown"
+	}
+	switch key {
 	case "up", "k":
-		if m.probCursor > 0 {
-			m.probCursor--
-			if m.probCursor < m.probScroll {
-				m.probScroll = m.probCursor
-			}
+		if *cursor > 0 {
+			*cursor--
 		}
 	case "down", "j":
-		if m.probCursor < len(m.problems)-1 {
-			m.probCursor++
-			if m.probCursor >= m.probScroll+rows {
-				m.probScroll = m.probCursor - rows + 1
-			}
+		if *cursor < total-1 {
+			*cursor++
 		}
 	case "pgup":
-		m.probCursor = max(0, m.probCursor-rows)
-		m.probScroll = min(m.probScroll, m.probCursor)
+		*cursor = max(0, *cursor-rows)
 	case "pgdown":
-		if len(m.problems) > 0 {
-			m.probCursor = min(len(m.problems)-1, m.probCursor+rows)
-			if m.probCursor >= m.probScroll+rows {
-				m.probScroll = m.probCursor - rows + 1
-			}
+		*cursor = min(total-1, *cursor+rows)
+	default:
+		return false
+	}
+	if *cursor < *scroll {
+		*scroll = *cursor
+	} else if *cursor >= *scroll+rows {
+		*scroll = *cursor - rows + 1
+	}
+	return true
+}
+
+func scrollLinesOffset(scroll *int, total, rows int, key string) bool {
+	maxScroll := max(0, total-rows)
+	switch key {
+	case "up", "k":
+		if *scroll > 0 {
+			*scroll--
 		}
-	case "i":
-		if m.indexing || m.store == nil {
-			return m, nil
+	case "down", "j":
+		if *scroll < maxScroll {
+			*scroll++
 		}
-		m.indexing = true
+	case "pgup":
+		*scroll = max(0, *scroll-rows)
+	case "pgdown":
+		*scroll = min(maxScroll, *scroll+rows)
+	default:
+		return false
+	}
+	return true
+}
+
+func updateFilterInput(in *textinput.Model, active *bool, apply func(), msg tea.Msg) tea.Cmd {
+	key, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		var cmd tea.Cmd
+		*in, cmd = in.Update(msg)
+		apply()
+		return cmd
+	}
+	switch key.String() {
+	case "enter":
+		*active = false
+		in.Blur()
+		apply()
+		return nil
+	case "esc":
+		*active = false
+		in.SetValue("")
+		in.Blur()
+		apply()
+		return nil
+	}
+	var cmd tea.Cmd
+	*in, cmd = in.Update(msg)
+	apply()
+	return cmd
+}
+
+func (m dashboardModel) startIndexAll() (dashboardModel, tea.Cmd) {
+	if m.indexing || m.store == nil {
+		return m, nil
+	}
+	m.probDetail = nil
+	m.probDetailScroll = 0
+	m.indexing = true
+	m.flashErr = ""
+	m.flashMsg = "Running indexing pass..."
+	return m, tea.Batch(m.spin.Tick, runIndexCmd(m.ctx, m.indexFn, m.cfg, m.store))
+}
+
+func (m dashboardModel) startIndexCollection(name string) (dashboardModel, tea.Cmd) {
+	if m.indexing || m.store == nil {
+		return m, nil
+	}
+	col, ok := m.cfg.Collection(name)
+	if !ok {
+		m.flashErr = fmt.Sprintf("collection %q is not in %s", name, m.cfgPath)
+		return m, nil
+	}
+	sub := m.cfg.Clone()
+	sub.Collections = []config.Collection{col}
+	m.probDetail = nil
+	m.probDetailScroll = 0
+	m.indexing = true
+	m.flashErr = ""
+	m.flashMsg = fmt.Sprintf("Indexing collection %q...", col.Name)
+	return m, tea.Batch(m.spin.Tick, runIndexCmd(m.ctx, m.indexFn, sub, m.store))
+}
+
+func (m dashboardModel) updateProbSearch(msg tea.Msg) (dashboardModel, tea.Cmd) {
+	cmd := updateFilterInput(&m.probSearchIn, &m.probSearchOn, m.applyProblemFilter, msg)
+	return m, cmd
+}
+
+func (m dashboardModel) updateStatusTab(key tea.KeyPressMsg) (dashboardModel, tea.Cmd) {
+	rows := max(4, m.height-18)
+	if moveListCursor(&m.probCursor, &m.probScroll, len(m.filteredProblems), rows, key.String()) {
+		return m, nil
+	}
+	switch key.String() {
+	case "enter":
+		if len(m.filteredProblems) > 0 && m.probCursor < len(m.filteredProblems) {
+			d := m.filteredProblems[m.probCursor]
+			m.probDetail = &d
+			m.probDetailScroll = 0
+		}
+	case "/":
+		m.probSearchOn = true
+		m.probSearchIn.CursorEnd()
+		return m, m.probSearchIn.Focus()
+	case "s":
+		m.probFilterIdx = (m.probFilterIdx + 1) % len(probStatusFilters)
+		m.probCursor = 0
+		m.probScroll = 0
+		m.applyProblemFilter()
+	case "esc":
+		if m.probSearchIn.Value() != "" || m.probFilterIdx != 0 {
+			m.probSearchIn.SetValue("")
+			m.probFilterIdx = 0
+			m.applyProblemFilter()
+		}
+	case "c":
+		if len(m.filteredProblems) > 0 && m.probCursor < len(m.filteredProblems) {
+			return m.startIndexCollection(m.filteredProblems[m.probCursor].Collection)
+		}
+		if len(m.cfg.Collections) == 1 {
+			return m.startIndexCollection(m.cfg.Collections[0].Name)
+		}
 		m.flashErr = ""
-		m.flashMsg = "Running indexing pass..."
-		return m, tea.Batch(m.spin.Tick, runIndexCmd(m.ctx, m.indexFn, m.cfg, m.store))
+		m.flashMsg = "Select a problem file to re-index its collection, or press 'i' for all."
+	case "i":
+		return m.startIndexAll()
 	case "R":
 		m.refreshStatus()
 		m.flashMsg = "Refreshed status"
@@ -868,73 +1155,117 @@ func (m dashboardModel) updateStatusTab(key tea.KeyPressMsg) (dashboardModel, te
 	return m, nil
 }
 
-func (m dashboardModel) updateAuditFilter(msg tea.Msg) (dashboardModel, tea.Cmd) {
+func (m dashboardModel) updateProblemDetail(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
-		var cmd tea.Cmd
-		m.auditFilterIn, cmd = m.auditFilterIn.Update(msg)
-		m.applyAuditFilter()
-		return m, cmd
+		return m, nil
+	}
+	lines := m.problemDetailLines(*m.probDetail)
+	rows := max(6, m.height-12)
+	if scrollLinesOffset(&m.probDetailScroll, len(lines), rows, key.String()) {
+		return m, nil
 	}
 	switch key.String() {
-	case "enter":
-		m.auditFilterOn = false
-		m.auditFilterIn.Blur()
-		m.applyAuditFilter()
-		return m, nil
-	case "esc":
-		m.auditFilterOn = false
-		m.auditFilterIn.SetValue("")
-		m.auditFilterIn.Blur()
-		m.applyAuditFilter()
-		return m, nil
+	case "esc", "enter":
+		m.probDetail = nil
+		m.probDetailScroll = 0
+	case "c":
+		return m.startIndexCollection(m.probDetail.Collection)
+	case "i":
+		return m.startIndexAll()
 	}
-	var cmd tea.Cmd
-	m.auditFilterIn, cmd = m.auditFilterIn.Update(msg)
-	m.applyAuditFilter()
+	return m, nil
+}
+
+func (m dashboardModel) updateAuditFilter(msg tea.Msg) (dashboardModel, tea.Cmd) {
+	cmd := updateFilterInput(&m.auditFilterIn, &m.auditFilterOn, m.applyAuditFilter, msg)
 	return m, cmd
+}
+
+func (m dashboardModel) resolveAuditDocs(docIDs []string) []string {
+	if len(docIDs) == 0 {
+		return nil
+	}
+	allowed := m.cfg.CollectionNames()
+	out := make([]string, 0, len(docIDs))
+	for _, id := range docIDs {
+		if m.store != nil {
+			if d, err := m.store.GetDocument(m.ctx, allowed, id); err == nil {
+				out = append(out, fmt.Sprintf("%s  ->  %s/%s (%s)", id, d.Collection, d.RelPath, d.Status))
+				continue
+			}
+		}
+		out = append(out, id+"  (not in currently indexed collections)")
+	}
+	return out
+}
+
+func (m *dashboardModel) openAuditDetail(e store.AuditEntry) {
+	eCopy := e
+	eCopy.DocIDs = slices.Clone(e.DocIDs)
+	m.auditDetail = &eCopy
+	m.auditDetailDocs = m.resolveAuditDocs(eCopy.DocIDs)
+	m.auditDetailScroll = 0
 }
 
 func (m dashboardModel) updateAuditTab(key tea.KeyPressMsg) (dashboardModel, tea.Cmd) {
 	rows := max(5, m.height-17)
+	if moveListCursor(&m.auditCursor, &m.auditScroll, len(m.filteredAudit), rows, key.String()) {
+		return m, nil
+	}
 	switch key.String() {
-	case "up", "k":
-		if m.auditCursor > 0 {
-			m.auditCursor--
-			if m.auditCursor < m.auditScroll {
-				m.auditScroll = m.auditCursor
-			}
-		}
-	case "down", "j":
-		if m.auditCursor < len(m.filteredAudit)-1 {
-			m.auditCursor++
-			if m.auditCursor >= m.auditScroll+rows {
-				m.auditScroll = m.auditCursor - rows + 1
-			}
-		}
-	case "pgup":
-		m.auditCursor = max(0, m.auditCursor-rows)
-		m.auditScroll = min(m.auditScroll, m.auditCursor)
-	case "pgdown":
-		if len(m.filteredAudit) > 0 {
-			m.auditCursor = min(len(m.filteredAudit)-1, m.auditCursor+rows)
-			if m.auditCursor >= m.auditScroll+rows {
-				m.auditScroll = m.auditCursor - rows + 1
-			}
+	case "enter":
+		if len(m.filteredAudit) > 0 && m.auditCursor < len(m.filteredAudit) {
+			m.openAuditDetail(m.filteredAudit[m.auditCursor])
 		}
 	case "/":
 		m.auditFilterOn = true
 		m.auditFilterIn.CursorEnd()
 		return m, m.auditFilterIn.Focus()
+	case "o":
+		m.auditOutcomeFilterIdx = (m.auditOutcomeFilterIdx + 1) % len(auditOutcomeFilters)
+		m.auditCursor = 0
+		m.auditScroll = 0
+		m.applyAuditFilter()
+	case "f":
+		m.auditFollow = !m.auditFollow
+		m.auditTickSeq++
+		m.flashErr = ""
+		if m.auditFollow {
+			m.refreshAudit()
+			m.flashMsg = "Audit follow on (refreshing every 1.5s)"
+			return m, auditTickCmd(m.auditTickSeq)
+		}
+		m.flashMsg = "Audit follow paused"
 	case "esc":
-		if m.auditFilterIn.Value() != "" {
+		if m.auditFilterIn.Value() != "" || m.auditOutcomeFilterIdx != 0 {
 			m.auditFilterIn.SetValue("")
+			m.auditOutcomeFilterIdx = 0
 			m.applyAuditFilter()
 		}
 	case "R":
 		m.refreshAudit()
 		m.flashMsg = "Refreshed audit log"
 		m.flashErr = ""
+	}
+	return m, nil
+}
+
+func (m dashboardModel) updateAuditDetail(msg tea.Msg) (dashboardModel, tea.Cmd) {
+	key, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return m, nil
+	}
+	lines := m.auditDetailLines(*m.auditDetail, m.auditDetailDocs)
+	rows := max(6, m.height-12)
+	if scrollLinesOffset(&m.auditDetailScroll, len(lines), rows, key.String()) {
+		return m, nil
+	}
+	switch key.String() {
+	case "esc", "enter":
+		m.auditDetail = nil
+		m.auditDetailDocs = nil
+		m.auditDetailScroll = 0
 	}
 	return m, nil
 }
@@ -1003,23 +1334,13 @@ func (m dashboardModel) updateTOMLPreview(msg tea.Msg) (dashboardModel, tea.Cmd)
 		return m, nil
 	}
 	rows := max(6, m.height-12)
-	maxScroll := max(0, len(m.tomlPreview)-rows)
+	if scrollLinesOffset(&m.tomlScroll, len(m.tomlPreview), rows, key.String()) {
+		return m, nil
+	}
 	switch key.String() {
 	case "esc", "q", "v", "enter":
 		m.tomlPreview = nil
 		m.tomlScroll = 0
-	case "up", "k":
-		if m.tomlScroll > 0 {
-			m.tomlScroll--
-		}
-	case "down", "j":
-		if m.tomlScroll < maxScroll {
-			m.tomlScroll++
-		}
-	case "pgup":
-		m.tomlScroll = max(0, m.tomlScroll-rows)
-	case "pgdown":
-		m.tomlScroll = min(maxScroll, m.tomlScroll+rows)
 	}
 	return m, nil
 }
@@ -1131,6 +1452,10 @@ func (m dashboardModel) View() string {
 		body = m.viewTokenModal()
 	case len(m.tomlPreview) > 0:
 		body = m.viewTOMLPreview()
+	case m.probDetail != nil:
+		body = m.viewProblemDetail()
+	case m.auditDetail != nil:
+		body = m.viewAuditDetail()
 	case m.rmColConfirm:
 		body = m.viewRemoveColConfirm()
 	case m.pruneOrphanConf:
@@ -1149,17 +1474,23 @@ func (m dashboardModel) View() string {
 			body = m.viewAuditTab()
 		case tabSettings:
 			body = m.viewSettingsTab()
+		case tabExplore:
+			body = m.expl.View()
 		}
 	}
 
 	b.WriteString(body)
-	if m.flashErr != "" {
-		b.WriteString("\n" + m.styles.err.Render("Error: "+m.flashErr))
+	errMsg := m.flashErr
+	if m.tab == tabExplore && errMsg == "" {
+		errMsg = m.expl.errMsg
+	}
+	if errMsg != "" {
+		b.WriteString("\n" + m.styles.err.Render("Error: "+errMsg))
 	} else if m.flashMsg != "" {
 		b.WriteString("\n" + m.styles.ok.Render(m.flashMsg))
 	}
 	if !m.hasOverlay() {
-		b.WriteString("\n" + m.styles.help.Render("1–5 / Tab switch tabs  •  q quit"))
+		b.WriteString("\n" + m.styles.help.Render("1–6 / Tab switch tabs  •  q quit"))
 	}
 	return b.String()
 }
@@ -1296,6 +1627,130 @@ func (m dashboardModel) viewRevokeConfirm() string {
 	return m.styles.modal.Width(max(44, min(80, m.width-6))).Render(b.String())
 }
 
+func (m dashboardModel) modalOuterWidth() int {
+	return max(44, min(108, m.width-6))
+}
+
+func (m dashboardModel) modalWrapWidth() int {
+	return max(28, m.modalOuterWidth()-6)
+}
+
+func appendWrappedKV(lines []string, label, value string, width int) []string {
+	prefix := fmt.Sprintf("%-13s ", label+":")
+	if value == "" {
+		return append(lines, prefix+"(none)")
+	}
+	if !strings.Contains(value, "\n") && len([]rune(value)) <= max(12, width-len([]rune(prefix))) {
+		return append(lines, prefix+value)
+	}
+	lines = append(lines, label+":")
+	for _, wl := range wrapLines(value, max(16, width-2)) {
+		lines = append(lines, "  "+wl)
+	}
+	return lines
+}
+
+func (m dashboardModel) renderDetailModal(title string, lines []string, scroll int, help string) string {
+	outer := m.modalOuterWidth()
+	rows := max(6, m.height-12)
+	maxScroll := max(0, len(lines)-rows)
+	off := min(max(0, scroll), maxScroll)
+	end := min(len(lines), off+rows)
+
+	var b strings.Builder
+	b.WriteString(m.styles.title.Render(title) + "\n\n")
+	b.WriteString(strings.Join(lines[off:end], "\n") + "\n")
+	if len(lines) > rows {
+		b.WriteString("\n" + m.styles.muted.Render(fmt.Sprintf("Lines %d–%d of %d", off+1, end, len(lines))))
+	}
+	b.WriteString("\n" + m.styles.help.Render(help))
+	return m.styles.modal.Width(outer).Render(b.String())
+}
+
+func (m dashboardModel) problemDetailLines(d store.Document) []string {
+	w := m.modalWrapWidth()
+	diskPath := "(collection not in current config)"
+	if col, ok := m.cfg.Collection(d.Collection); ok {
+		diskPath = filepath.Join(col.Path, filepath.FromSlash(d.RelPath))
+	}
+	state := d.Status
+	if d.Truncated {
+		state += " (truncated)"
+	}
+	indexedAt := "unknown"
+	if d.IndexedAt > 0 {
+		indexedAt = time.Unix(d.IndexedAt, 0).Local().Format("2006-01-02 15:04:05")
+	}
+
+	var lines []string
+	lines = appendWrappedKV(lines, "Collection", d.Collection, w)
+	lines = appendWrappedKV(lines, "Rel path", d.RelPath, w)
+	lines = appendWrappedKV(lines, "Disk path", diskPath, w)
+	lines = appendWrappedKV(lines, "Status", state, w)
+	lines = appendWrappedKV(lines, "Document ID", d.ID, w)
+	lines = appendWrappedKV(lines, "Title", d.Title, w)
+	lines = appendWrappedKV(lines, "File type", d.FileType, w)
+	lines = appendWrappedKV(lines, "Size", formatBytes(d.Size), w)
+	lines = appendWrappedKV(lines, "Indexed at", indexedAt, w)
+	lines = appendWrappedKV(lines, "SHA-256", d.SHA256, w)
+	if len(d.Meta) > 0 {
+		keys := make([]string, 0, len(d.Meta))
+		for k := range d.Meta {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%s=%s", k, d.Meta[k]))
+		}
+		lines = appendWrappedKV(lines, "Metadata", strings.Join(parts, ", "), w)
+	}
+	lines = appendWrappedKV(lines, "Error", d.Error, w)
+	lines = appendWrappedKV(lines, "Next step", problemGuidance(d), w)
+	return lines
+}
+
+func (m dashboardModel) viewProblemDetail() string {
+	d := *m.probDetail
+	lines := m.problemDetailLines(d)
+	help := fmt.Sprintf("↑/↓/PgUp/PgDn scroll  •  c re-index %s  •  i index all  •  Esc/Enter close", d.Collection)
+	return m.renderDetailModal("Problem File Detail", lines, m.probDetailScroll, help)
+}
+
+func (m dashboardModel) auditDetailLines(e store.AuditEntry, docLines []string) []string {
+	w := m.modalWrapWidth()
+	q := e.Query
+	if q == "" {
+		q = "(none, or omitted when audit.log_queries = false)"
+	}
+
+	var lines []string
+	lines = appendWrappedKV(lines, "Time", e.Time.Local().Format("2006-01-02 15:04:05 MST"), w)
+	lines = appendWrappedKV(lines, "Token name", e.TokenName, w)
+	lines = appendWrappedKV(lines, "Token ID", e.TokenID, w)
+	lines = appendWrappedKV(lines, "Transport", e.Transport, w)
+	lines = appendWrappedKV(lines, "Remote", e.Remote, w)
+	lines = appendWrappedKV(lines, "Operation", e.Op, w)
+	lines = appendWrappedKV(lines, "Outcome", e.Outcome, w)
+	lines = appendWrappedKV(lines, "Query", q, w)
+	if len(docLines) == 0 {
+		lines = appendWrappedKV(lines, "Documents", "(none)", w)
+	} else {
+		lines = append(lines, fmt.Sprintf("Documents (%d):", len(docLines)))
+		for _, dl := range docLines {
+			for _, wl := range wrapLines(dl, max(16, w-2)) {
+				lines = append(lines, "  "+wl)
+			}
+		}
+	}
+	return lines
+}
+
+func (m dashboardModel) viewAuditDetail() string {
+	lines := m.auditDetailLines(*m.auditDetail, m.auditDetailDocs)
+	return m.renderDetailModal("Audit Entry Detail", lines, m.auditDetailScroll, "↑/↓/PgUp/PgDn scroll  •  Esc/Enter close")
+}
+
 func (m dashboardModel) viewStatusTab() string {
 	var b strings.Builder
 	b.WriteString(m.styles.label.Render("Index Coverage"))
@@ -1329,14 +1784,30 @@ func (m dashboardModel) viewStatusTab() string {
 		b.WriteString("\n" + m.styles.label.Render(fmt.Sprintf("Embeddings: %d of %d chunks done", m.embTotal-m.embMissing, m.embTotal)) + "\n")
 	}
 
-	b.WriteString("\n" + m.styles.label.Render(fmt.Sprintf("Files needing attention (%d)", len(m.problems))) + "\n")
+	hdr := fmt.Sprintf("Files needing attention (%d)", len(m.problems))
+	if len(m.filteredProblems) != len(m.problems) {
+		hdr = fmt.Sprintf("Files needing attention (%d/%d)", len(m.filteredProblems), len(m.problems))
+	}
+	b.WriteString("\n" + m.styles.label.Render(hdr))
+	if code := probStatusFilters[m.probFilterIdx]; code != "" {
+		b.WriteString("  " + m.styles.badge.Render("status: "+probFilterLabel(code)))
+	}
+	if m.probSearchOn {
+		b.WriteString("  " + m.probSearchIn.View())
+	} else if f := strings.TrimSpace(m.probSearchIn.Value()); f != "" {
+		b.WriteString("  " + m.styles.badge.Render("filter: "+f))
+	}
+	b.WriteString("\n")
+
 	if len(m.problems) == 0 {
 		b.WriteString(m.styles.muted.Render("  None.") + "\n")
+	} else if len(m.filteredProblems) == 0 {
+		b.WriteString(m.styles.muted.Render("  No matching problem files (press Esc to clear filters).") + "\n")
 	} else {
 		rows := max(4, m.height-18)
-		end := min(len(m.problems), m.probScroll+rows)
+		end := min(len(m.filteredProblems), m.probScroll+rows)
 		for i := m.probScroll; i < end; i++ {
-			d := m.problems[i]
+			d := m.filteredProblems[i]
 			state := d.Status
 			if d.Truncated {
 				state += "(trunc)"
@@ -1354,13 +1825,23 @@ func (m dashboardModel) viewStatusTab() string {
 		}
 	}
 
-	b.WriteString("\n" + m.styles.help.Render("↑/↓/PgUp/PgDn scroll problems  •  i index now  •  R refresh"))
+	if m.probSearchOn {
+		b.WriteString("\n" + m.styles.help.Render("Type to filter problems  •  Enter apply  •  Esc clear"))
+	} else {
+		b.WriteString("\n" + m.styles.help.Render("↑/↓/PgUp/PgDn scroll  •  Enter inspect  •  / search  •  s status  •  c re-index col  •  i index all  •  R refresh"))
+	}
 	return m.styles.panel.Width(max(44, m.width-4)).Render(b.String())
 }
 
 func (m dashboardModel) viewAuditTab() string {
 	var b strings.Builder
 	b.WriteString(m.styles.label.Render("Recent Access Audit Log"))
+	if m.auditFollow {
+		b.WriteString("  " + m.styles.badge.Render("FOLLOWING live"))
+	}
+	if code := auditOutcomeFilters[m.auditOutcomeFilterIdx]; code != "" {
+		b.WriteString("  " + m.styles.badge.Render("outcome: "+auditOutcomeLabel(code)))
+	}
 	if m.auditFilterOn {
 		b.WriteString("  " + m.auditFilterIn.View())
 	} else if f := strings.TrimSpace(m.auditFilterIn.Value()); f != "" {
@@ -1373,16 +1854,16 @@ func (m dashboardModel) viewAuditTab() string {
 	} else {
 		rows := max(5, m.height-17)
 		end := min(len(m.filteredAudit), m.auditScroll+rows)
-		b.WriteString(m.styles.muted.Render(fmt.Sprintf("  %-19s  %-12s  %-8s  %-14s  %-7s  %4s  %s",
+		b.WriteString(m.styles.muted.Render(fmt.Sprintf("  %-19s  %-12s  %-8s  %-14s  %-11s  %4s  %s",
 			"TIME", "TOKEN", "VIA", "OP", "OUTCOME", "DOCS", "QUERY")) + "\n")
 		for i := m.auditScroll; i < end; i++ {
 			e := m.filteredAudit[i]
-			line := fmt.Sprintf("%-19s  %-12s  %-8s  %-14s  %-7s  %4d  %s",
+			line := fmt.Sprintf("%-19s  %-12s  %-8s  %-14s  %-11s  %4d  %s",
 				e.Time.Local().Format("2006-01-02 15:04:05"),
 				truncateText(e.TokenName, 12),
 				truncateText(e.Transport, 8),
 				truncateText(e.Op, 14),
-				truncateText(e.Outcome, 7),
+				truncateText(e.Outcome, 11),
 				len(e.DocIDs),
 				e.Query,
 			)
@@ -1405,7 +1886,7 @@ func (m dashboardModel) viewAuditTab() string {
 	if m.auditFilterOn {
 		b.WriteString("\n" + m.styles.help.Render("Type to filter  •  Enter apply  •  Esc clear"))
 	} else {
-		b.WriteString("\n" + m.styles.help.Render("↑/↓/PgUp/PgDn scroll  •  / filter  •  Esc clear filter  •  R refresh"))
+		b.WriteString("\n" + m.styles.help.Render("↑/↓/PgUp/PgDn scroll  •  Enter inspect  •  / search  •  o outcome  •  f follow  •  Esc clear  •  R refresh"))
 	}
 	return m.styles.panel.Width(max(44, m.width-4)).Render(b.String())
 }

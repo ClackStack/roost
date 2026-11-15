@@ -6,6 +6,7 @@
 	import Download from '#lib/components/Download.svelte';
 	import LeakToy from '#lib/components/LeakToy.svelte';
 	import SearchToy from '#lib/components/SearchToy.svelte';
+	import SetupToy from '#lib/components/SetupToy.svelte';
 	import { checksumsUrl, exampleConfigUrl, licence, readmeUrl, repo, securityUrl } from '#lib/site.ts';
 
 	const timings = [
@@ -252,6 +253,27 @@
 	</div>
 </Insert>
 
+<section id="setup" class="page wrap setup" aria-labelledby="setup-h">
+	<div class="setup-copy">
+		<h2 id="setup-h">Configure in the terminal, <mark class="hl swipe">not a browser</mark>.</h2>
+		<p class="lede">
+			Run <code>roost setup</code> on the machine hosting your files. No admin web GUI, no default password to change later.
+		</p>
+		<ul class="setup-points">
+			<li>
+				<strong>Guided first-run wizard:</strong> picks <code>storage.data_dir</code> and collection folders with an interactive directory browser (<code>/</code> path jump with <code>Tab</code> completion, <code>.</code> hidden toggle, overlap guard), sets listener and optional embeddings (off by default with an outbound warning), previews the TOML, writes <code>roost.toml</code> atomically (<code>0600</code>), and prints your first <code>roost_...</code> token once with ready-to-paste client snippets.
+			</li>
+			<li>
+				<strong>6-tab configurator on return runs:</strong> once <code>roost.toml</code> exists, <code>roost setup</code> opens live tabs for Collections, Tokens (immediate SQLite revocation), Status, Audit (with live follow), Settings, and Explore (test searches, inspect extracted sections, and preview token ACLs via <code>roost explore</code> too). Pass <code>--wizard</code> to rerun onboarding.
+			</li>
+			<li>
+				<strong>Automation stays untouched:</strong> <code>roost setup</code> refuses non-interactive pipes; scripts and provisioning keep using <code>roost init</code> and CLI subcommands.
+			</li>
+		</ul>
+	</div>
+	<SetupToy />
+</section>
+
 <Insert color="var(--pink)" id="get" label="Download Roost" tilt="0.35deg">
 	<div class="page wrap get">
 		<div>
@@ -265,15 +287,14 @@
 		<div>
 			<Code
 				label="Quick start on Linux"
-				mark={3}
+				mark={1}
 				lines={[
 					'curl -fsSL https://roost.clackstack.dev/install.sh | sh',
-					'roost init   # writes roost.toml; set data_dir and collections',
-					'roost token create --name alice --collections legal,hr',
+					'roost setup   # guided wizard for folders, server and tokens',
 					'roost serve'
 				]}
 			/>
-			<p class="small"><code>install.sh</code> verifies the binary against <a href={checksumsUrl}>SHA256SUMS</a>. Or download the binary on the left and run <code>./roost init</code> to write <a href={exampleConfigUrl}>roost.example.toml</a>. Save the token, it’s shown only once.</p>
+			<p class="small"><code>install.sh</code> verifies the binary against <a href={checksumsUrl}>SHA256SUMS</a>. Scripting a headless box? Use <code>roost init</code> (writes <a href={exampleConfigUrl}>roost.example.toml</a>) and <code>roost token create</code> instead. Save any generated token, it’s shown only once.</p>
 		</div>
 	</div>
 </Insert>
@@ -540,10 +561,38 @@
 		max-width: none;
 	}
 
+	.setup {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+		gap: clamp(24px, 4vw, 48px);
+		align-items: start;
+	}
+
+	.setup-points {
+		list-style: none;
+		margin: 18px 0 0;
+		padding: 0;
+		display: grid;
+		gap: 14px;
+	}
+
+	.setup-points li {
+		padding-left: 14px;
+		border-left: 4px solid var(--yellow);
+		font-size: 1rem;
+		line-height: 1.55;
+		color: var(--ink-soft);
+	}
+
+	.setup-points strong {
+		color: var(--ink);
+	}
+
 	@media (max-width: 960px) {
 		.leaks,
 		.speed,
 		.mcp,
+		.setup,
 		.get {
 			grid-template-columns: minmax(0, 1fr);
 		}
