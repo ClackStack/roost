@@ -117,19 +117,22 @@ fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-# Build a previous version (v0.0.0-0.prev -> 0.0.0~0.prev) for the host arch so
-# containers can exercise a genuine N-1 -> N apt/dnf upgrade and observe the
-# binary version change from `roost version`.
+# Build a previous version for the host arch so containers can exercise a
+# genuine N-1 -> N apt/dnf upgrade and observe the binary version change from
+# `roost version`. Use 0.0.0~~prev as the package version: RPM ranks numeric
+# segments above letters (so 0.0.0~0.prev > 0.0.0~e3afd3e), whereas a leading
+# `~~` sorts strictly older than every `0.0.0~...` version in both dpkg and rpm.
 prev_version="v0.0.0-0.prev"
+prev_pkg_version="0.0.0~~prev"
 mkdir -p "$work/prev" "$work/curr"
 CGO_ENABLED=0 GOOS=linux GOARCH="$host_arch" go build -trimpath \
   -ldflags "-s -w -X main.version=${prev_version}" \
   -o "$work/prev/roost-${prev_version}-linux-${host_arch}" ./cmd/roost
-VERSION="$prev_version" PLATFORMS="linux/${host_arch}" DIST_DIR="$work/prev" \
+VERSION="$prev_version" PKG_VERSION="$prev_pkg_version" PLATFORMS="linux/${host_arch}" DIST_DIR="$work/prev" \
   scripts/package.sh >/dev/null
 
-prev_deb="$(find_deb "$host_arch" "$work/prev")"
-prev_rpm="$(find_rpm "$host_rpm_arch" "$work/prev")"
+find_deb "$host_arch" "$work/prev" >/dev/null
+find_rpm "$host_rpm_arch" "$work/prev" >/dev/null
 curr_deb="$(find_deb "$host_arch" "$DIST_DIR")"
 curr_rpm="$(find_rpm "$host_rpm_arch" "$DIST_DIR")"
 curr_deb_name="$(basename "$curr_deb")"
@@ -137,8 +140,6 @@ curr_rpm_name="$(basename "$curr_rpm")"
 curr_bin_matches=("$DIST_DIR"/roost-*-linux-"$host_arch")
 [ -f "${curr_bin_matches[0]}" ] || fail "missing raw binary for linux-$host_arch in $DIST_DIR"
 expected_roost_version="$("${curr_bin_matches[0]}" version)"
-cp "$prev_deb" "$work/prev/prev.deb"
-cp "$prev_rpm" "$work/prev/prev.rpm"
 cp "$curr_deb" "$work/curr/$curr_deb_name"
 cp "$curr_rpm" "$work/curr/$curr_rpm_name"
 
@@ -201,7 +202,8 @@ deb [signed-by=/etc/apt/keyrings/roost-test.gpg] file:$repo_dir stable main
 SRC
 
 # 1. Fresh install of N-1 from signed APT repo
-publish_deb /work/prev/prev.deb "roost_0.0.0~0.prev_${arch}.deb"
+prev_src=(/work/prev/*.deb)
+publish_deb "${prev_src[0]}" "$(basename "${prev_src[0]}")"
 apt-get update -qq
 apt-get install -y -qq roost >/dev/null
 
@@ -307,7 +309,8 @@ gpgkey=file:///tmp/RPM-GPG-KEY-clackstack-test
 REPO
 
 # 1. Fresh install of N-1 from signed DNF repo
-publish_rpm /work/prev/prev.rpm "roost-0.0.0~0.prev-1.$(uname -m).rpm"
+prev_src=(/work/prev/*.rpm)
+publish_rpm "${prev_src[0]}" "$(basename "${prev_src[0]}")"
 dnf -y -q --disablerepo='*' --enablerepo=roost-test makecache
 dnf -y -q --disablerepo='*' --enablerepo=roost-test install roost >/dev/null
 

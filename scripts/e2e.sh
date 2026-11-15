@@ -70,11 +70,15 @@ mcp() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json
   -d "$2" "http://127.0.0.1:$port/mcp"; }
 tool() { mcp "$1" "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$2\",\"arguments\":$3}}"; }
 
+initial_indexed() {
+  R status --config "$work/roost.toml" | awk '$1=="legal" && $2==3 && $9!="never"{n++} $1=="hr" && $2==2 && $9!="never"{n++} END{exit n!=2}'
+}
+
 echo "== Part 1: default configuration"
 strace -f -qq -e trace=execve,connect,sendto,sendmsg -o "$work/trace.log" "$work/roost" serve --config "$work/roost.toml" 2>"$work/serve.log" &
 pids+=($!)
 wait_up "$port"
-wait_for "initial index finished" '[ "$(R status --config "$work/roost.toml" | awk "/^legal/{print \$2}")" = "3" ]'
+wait_for "initial index finished" initial_indexed
 has "startup declares no egress" "$(cat "$work/serve.log")" "egress: none"
 
 out=$(search "$legal" 'heron milestone')

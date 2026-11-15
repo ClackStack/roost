@@ -46,7 +46,9 @@ find_nfpm() {
 }
 
 nfpm_bin="$(find_nfpm)"
-pkg_version="$(normalize_version "$VERSION")"
+# Allow callers (such as test-packages.sh synthetic N-1 builds) to supply an
+# explicit deb/rpm version that is not semver.
+pkg_version="${PKG_VERSION:-$(normalize_version "$VERSION")}"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
