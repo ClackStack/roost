@@ -17,15 +17,18 @@ REST, with per-token access control and an audit log.
 
 ## Quick start
 
-Install the latest release binary (Linux amd64/arm64; re-run to upgrade):
+Install the latest release (Linux amd64/arm64; re-run to upgrade):
 
 ```sh
 curl -fsSL https://roost.clackstack.dev/install.sh | sh
 ```
 
-The script checks the binary against the release's SHA256SUMS, installs it to
-`/usr/local/bin` (or `~/.local/bin` without root) and prints the setup steps.
-Pin a version with `| sh -s -- v1.2.3`.
+The script verifies everything against the release's SHA256SUMS first. With
+root or sudo on an apt/dpkg or dnf/yum/zypper system it installs the `.deb` or
+`.rpm` package (which also installs the hardened systemd unit and the starter
+`/etc/roost/roost.toml`); otherwise it installs the self-contained binary to
+`/usr/local/bin` (or `~/.local/bin`). Pin a version with `| sh -s -- v1.2.3`,
+or force a path with `| sh -s -- --pkg archive` (or `deb`/`rpm`).
 
 Or build from source:
 

@@ -110,6 +110,14 @@
 		name="description"
 		content="Roost is a self-hosted document server for AI tools. One static binary indexes Word, Excel, PowerPoint and PDF files and serves them over MCP and REST, with no outbound calls by default."
 	/>
+	<link rel="canonical" href="https://roost.clackstack.dev/" />
+	<meta property="og:title" content="Roost: your docs stay home, your AI still gets access" />
+	<meta
+		property="og:description"
+		content="A self-hosted document server for AI tools. One static binary, no outbound calls by default."
+	/>
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content="https://roost.clackstack.dev/" />
 </svelte:head>
 
 <Hero />
@@ -294,7 +302,7 @@
 					'roost serve'
 				]}
 			/>
-			<p class="small"><code>install.sh</code> verifies the binary against <a href={checksumsUrl}>SHA256SUMS</a>. Scripting a headless box? Use <code>roost init</code> (writes <a href={exampleConfigUrl}>roost.example.toml</a>) and <code>roost token create</code> instead. Save any generated token, it’s shown only once.</p>
+			<p class="small"><code>install.sh</code> verifies everything against <a href={checksumsUrl}>SHA256SUMS</a> and installs the <code>.deb</code> or <code>.rpm</code> package when the machine supports one (the package ships the hardened systemd unit), falling back to the single binary. Scripting a headless box? Use <code>roost init</code> (writes <a href={exampleConfigUrl}>roost.example.toml</a>) and <code>roost token create</code> instead. Save any generated token, it’s shown only once.</p>
 		</div>
 	</div>
 </Insert>

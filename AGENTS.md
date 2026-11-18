@@ -54,14 +54,23 @@ Don't hand-edit them.
   source bundle). A tag can never publish untested code.
 - Linux-only is deliberate; the platform list is `PLATFORMS` in `Taskfile.yml`
   and stays the single source of truth for both local and CI releases.
-- `install.sh` (repo root) is the `curl | sh` installer for release binaries.
-  The website build emits it at `https://roost.clackstack.dev/install.sh`
-  (`website/vite.config.ts`), and that is the URL the README gives. It
-  depends on release artifacts keeping their names (`roost-<tag>-linux-<arch>`
-  plus `SHA256SUMS`) and on `roost version` existing. Before changing its URL
-  building or artifact logic, test it against a fake release served by
-  `python3 -m http.server` (sed the base URL in a copy; exercise happy path,
-  corrupt checksum, and missing checksum).
+- `install.sh` (repo root) is the `curl | sh` installer for releases. The
+  website build emits it at `https://roost.clackstack.dev/install.sh`
+  (`website/vite.config.ts`), and that is the URL the README gives. With root
+  or sudo it installs the release `.deb`/`.rpm` package (same selection logic
+  quack's installer uses: apt/dpkg vs dnf/yum/zypper detection, staying with
+  the kind an earlier install used, `--pkg deb|rpm|archive` to force,
+  checksum-verified before anything privileged runs); without root it installs
+  the self-contained binary. It depends on release artifacts keeping their
+  names (`roost-<tag>-linux-<arch>`, `roost_<ver>_<debarch>.deb`,
+  `roost-<ver>-1.<rpmarch>.rpm`, plus `SHA256SUMS` — `<ver>` is the tag
+  without the leading `v`) and on `roost version` existing. Before changing
+  its URL building or artifact logic, test it against a fake release served by
+  `python3 -m http.server` (sed the base URL in a copy; exercise happy paths
+  for binary and package — package installs can run as root in podman
+  debian/fedora containers with `--network=host` — plus corrupt checksum and
+  missing checksum; a missing package entry in SHA256SUMS must fall back to
+  the binary, and an unusable sudo must fall back to the binary path too).
 
 ## Testing the MCP interface with quack
 
@@ -221,6 +230,11 @@ extraction output changes.
   routes; relative imports within lib.
 - `src/lib/site.ts` centralizes everything release-coupled: version, repo URL,
   download/checksum URLs, platform list. Update it when releases change.
+- SEO: `src/routes/sitemap.xml/+server.ts` prerenders the sitemap (single-page
+  list lives in the file — extend it if pages are added), `static/robots.txt`
+  points crawlers at it, and `static/og.png` is the social card; shared
+  OpenGraph/Twitter tags and the Organization JSON-LD live in
+  `src/routes/+layout.svelte`.
 - Visual design: hand-drawn zine aesthetic; tokens and type scale are specified
   in `DESIGN.md` (root), implemented as CSS custom properties in
   `src/app.css`. The `feTurbulence`/`feDisplacementMap` filter `#wob` (defined
