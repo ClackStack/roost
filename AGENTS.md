@@ -58,19 +58,22 @@ Don't hand-edit them.
   website build emits it at `https://roost.clackstack.dev/install.sh`
   (`website/vite.config.ts`), and that is the URL the README gives. With root
   or sudo it installs the release `.deb`/`.rpm` package (same selection logic
-  quack's installer uses: apt/dpkg vs dnf/yum/zypper detection, staying with
-  the kind an earlier install used, `--pkg deb|rpm|archive` to force,
-  checksum-verified before anything privileged runs); without root it installs
-  the self-contained binary. It depends on release artifacts keeping their
-  names (`roost-<tag>-linux-<arch>`, `roost_<ver>_<debarch>.deb`,
-  `roost-<ver>-1.<rpmarch>.rpm`, plus `SHA256SUMS` — `<ver>` is the tag
-  without the leading `v`) and on `roost version` existing. Before changing
-  its URL building or artifact logic, test it against a fake release served by
-  `python3 -m http.server` (sed the base URL in a copy; exercise happy paths
-  for binary and package — package installs can run as root in podman
-  debian/fedora containers with `--network=host` — plus corrupt checksum and
-  missing checksum; a missing package entry in SHA256SUMS must fall back to
-  the binary, and an unusable sudo must fall back to the binary path too).
+  quack's installer uses: keeping an already-installed `.deb`/`.rpm` on that
+  same format without silent fallback to the binary, preferring high-level
+  package managers `apt-get` vs `dnf`/`yum`/`zypper` before bare `dpkg`/`rpm`
+  on fresh installs, `--pkg deb|rpm|archive` to force, matching nfpm-normalized
+  filenames in `SHA256SUMS`, and checksum-verifying before anything privileged
+  runs); without root on a fresh install it installs the self-contained binary.
+  It depends on release artifacts keeping their names (`roost-<tag>-linux-<arch>`,
+  `roost_<ver>_<debarch>.deb`, `roost-<ver>-1.<rpmarch>.rpm`, plus `SHA256SUMS`
+  — `<ver>` is the tag without the leading `v`) and on `roost version` existing.
+  Offline regression tests live in `scripts/test_install.py`
+  (`python3 -m unittest -v scripts/test_install.py`); package installs can also
+  run as root in podman debian/fedora containers with `--network=host`. On a
+  fresh install without `--pkg`, a missing package entry in `SHA256SUMS` and an
+  unusable `sudo` fall back to the binary path; when updating an existing
+  `.deb`/`.rpm` (or when `--pkg deb|rpm` is forced), they fail with a clear
+  message pointing to `--pkg archive`.
 
 ## Testing the MCP interface with quack
 

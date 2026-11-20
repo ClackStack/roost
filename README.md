@@ -23,12 +23,15 @@ Install the latest release (Linux amd64/arm64; re-run to upgrade):
 curl -fsSL https://roost.clackstack.dev/install.sh | sh
 ```
 
-The script verifies everything against the release's SHA256SUMS first. With
-root or sudo on an apt/dpkg or dnf/yum/zypper system it installs the `.deb` or
-`.rpm` package (which also installs the hardened systemd unit and the starter
-`/etc/roost/roost.toml`); otherwise it installs the self-contained binary to
-`/usr/local/bin` (or `~/.local/bin`). Pin a version with `| sh -s -- v1.2.3`,
-or force a path with `| sh -s -- --pkg archive` (or `deb`/`rpm`).
+The script verifies everything against the release's SHA256SUMS first. If roost
+is already installed as a `.deb` or `.rpm` package, re-running updates it with
+that same package format (never silently falling back to the binary). On fresh
+installs with root or sudo on an apt/dpkg or dnf/yum/zypper system it installs
+the `.deb` or `.rpm` package (which also installs the hardened systemd unit and
+the starter `/etc/roost/roost.toml`); otherwise it installs the self-contained
+binary to `/usr/local/bin` (or `~/.local/bin`). Pin a version with
+`| sh -s -- v1.2.3`, or force a path with `| sh -s -- --pkg archive` (or
+`deb`/`rpm`).
 
 Or build from source:
 
